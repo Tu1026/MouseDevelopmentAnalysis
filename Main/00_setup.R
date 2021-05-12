@@ -6,7 +6,7 @@
 # Package installation
 # -----------------------------------------------------------------------------
 
-packages <- c("tidyverse", "assertthat")
+packages <- c("tidyverse", "assertthat","googlesheets4")
 
 install.packages(setdiff(packages, rownames(installed.packages())))
 
@@ -21,6 +21,9 @@ if (!"biomaRt" %in% rownames(installed.packages())) {
 library(tidyverse)
 library(assertthat)
 library(biomaRt)
+library(tools)
+library(googlesheets4)
+
 
 
 # Download metadata tsv containing gene count table URLs
@@ -114,3 +117,6 @@ write.table(
 )
 
 stopifnot(is.readable(mm_ensembl_outfile))
+
+
+
