@@ -162,25 +162,20 @@ names(list_pro_count_tables) <- list.files(pro_dir)
 #todo make this more robust with regex
 stopifnot (length(list_pro_count_tables)== length(my_expression_tables))
 
-length(list_pro_count_tables)
-nrows <-lapply(list_pro_count_tables, function(list_of_tables){nrow(list_of_tables)})
-nrows <- unlist(nrows)
-sum(nrows)
-1*15015
-
-nrow(list_pro_count_tables[[4]])
 
 #---------- apply replicate metadata from google sheets
 
 replicate_meta <- read_sheet("1gFkSHD15wdd3FdCrZ51DQOi9RYQg01i1TXpIvkDVIz0")
 
 
+correct_levels <- c(10.5,11.5,12.5,13.5,14.5,15.5,16.5,0)
 
 identify_in <- function(dataframe,replicate_meta){
   my_row <- replicate_meta[which(replicate_meta$file_dataset == dataframe$name[1]),]
   dataframe <- dataframe%>%
     mutate(tissue_type = factor(my_row[2]),
-           dev_stage = factor(my_row[3]))
+           dev_stage = factor(my_row[3], levels = correct_levels),
+           replicate = factor(my_row[4]))
 }
 
 list_pro_count_tables <- lapply(list_pro_count_tables,identify_in,replicate_meta)
@@ -195,28 +190,61 @@ list_pro_count_tables <- lapply(list_pro_count_tables,identify_in,replicate_meta
 
 
 #----------- conglomerate important info into 1 master table
-create_master_table <- function(list_of_dataframes) {
-  master_table <- data.frame()
-  for (i in list_of_dataframes) {
-    print(paste("Master_Table:", master_table))
-    print(paste("list index:"),i)
-    master_table <- rbind(master_table,i)
-  return(master_table)
-  }
-}
-master_table <- create_master_table(list_pro_count_tables)
-nrow(master_table)
+# create_master_table <- function(list_of_dataframes) {
+#   master_table <- data.frame()
+#   for (i in list_of_dataframes){
+#     print(i)
+#     # print(master_table)
+#     # master_table <- rbind(master_table,i)
+#   return(master_table)
+#   }
+# }
 
-for (i in list_pro_count_tables){
-  print (i)
-}
+#why was that not working????
 
 master_table <- data.frame()
-master_table <- rbind(master_table,list_pro_count_tables[[1]])
-master_table <- rbind(master_table,list_pro_count_tables[[2]])
+for (i in list_pro_count_tables){
+  # print(i)
+  # print(master_table)
+  master_table <- rbind(master_table,i)
+  # print(master_table)
+}
 
-ncol(master_table)
-nrow(master_table)
-ncol(list_pro_count_tables[2])
-stopifnot(nrow (master_table)==nrows)  
+
+nrows <-lapply(list_pro_count_tables, function(list_of_tables){nrow(list_of_tables)})
+count_table_rows <- sum(unlist(nrows))
+
+stopifnot(nrow(master_table)==count_table_rows)
+
+#---------- summary stats on master_table
+
+#todo pearson 
+
+sum_master_table <- master_table %>%
+  group_by(dev_stage,Symbol)%>%
+  mutate(replicate=as.double(replicate))%>%
+  summarize(avg_count = mean(expected_count), pearson = cor(replicate,expected_count,method="pearson"))
+
+glimpse(sum_master_table)
+
+arr_master_table <- sum_master_table %>%
+  arrange(desc(avg_count), .by_group=TRUE)
+  
+
+#------------prelim visualization
+
+library(ggplot2)
+
+sample_table <- arr_master_table %>%
+  filter(dev_stage == c(10.5,11.5),
+         avg_count > 10000)
+glimpse(sample_table)
+
+dev_stage_graph <- ggplot(sample_table)+
+  geom_col(mapping = aes(x = Symbol, y = avg_count, fill = dev_stage), position = 'dodge')+
+  theme(axis.ticks.x= element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank())
+
+  
 
