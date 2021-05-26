@@ -1,17 +1,15 @@
 ## This script downloads gene count tables for the different mouse development
 ## transcriptome samples
 
+whats_run <- c(whats_run,"01")
 
 library(tidyverse)
+library(tools)
+library(googlesheets4)
 
 pc <- read.delim("Data/ensembl_mouse_protein_coding_104.tsv", stringsAsFactors = FALSE)
 file_meta <- read.delim("Data/ENCSR574CRQ_metadata.tsv", stringsAsFactors = FALSE)
 count_dir <- "Data/Count_tables"
-
-if (!(dir.exists(count_dir))) {
-  warning("Creating Count_Dir")
-  dir.create(count_dir)
-}
 
 
 #
@@ -19,14 +17,31 @@ if (!(dir.exists(count_dir))) {
 # -----------------------------------------------------------------------------
 
 
+#
+#filter experimental meta_data for gene quantification, forebrain experiments
+#
 fb_meta <- filter(file_meta,
              Biosample.term.name == "forebrain" &
              File.output.type == "gene quantifications")
+glimpse(fb_meta)
 
-# example on one file. implement iterative strategy.
+#
+#Creata a Data/Count_tables directory if one does not already exist. 
+#
+if (!(dir.exists(count_dir))) {
+  warning("Creating Count_Dir")
+  dir.create(count_dir)
+}
 
-dnld_data <- function(fb_meta)
-  {
+
+dnld_data <- function(fb_meta) {
+  #
+  #Downloads expression data by using the URL provided in fb_meta
+  #Only downloads gene quantification data for forebrain experiments
+  #
+  #@param fb_meta: The experimental meta_data containing only quantification data for forebrain experiments
+  #@return: Downloads expression data into the count_dir directory (Cata/Count_tables)
+  
   for (i in 1:nrow(fb_meta)) {
     id <- fb_meta$File.accession[i]
     url <- fb_meta$S3.URL[i]
@@ -37,214 +52,108 @@ dnld_data <- function(fb_meta)
     }
   }
 }
+
+#
+#Deciding if dnld_data needs to be executed, or if data has already been downloaded
+#
 fb_gen_ex <- list.files(count_dir)
-
-if (is.null(fb_gen_ex)) {
-  warning ("Expression data has not been downloaded yet. Downloading data...")
-  dnld_data
+if (length(fb_gen_ex) != nrow(fb_meta)) {
+    warning ("Expression data has not been downloaded yet. Downloading data...")
+    dnld_data(fb_meta)
+  } else { 
+    warning ("Expression data has already been downloaded")
 }
-#------md5sum
-
-md5 <-lapply(X = paste0(count_dir,"/",list.files(count_dir)), FUN = md5sum)
-names(md5)=c(fb_gen_ex)
-md5_vector <- as.vector(unlist(md5,use.names=TRUE))
-names(md5_vector) <- names(md5)
-md5_vector
-
-stopifnot(md5_vector == md5)
-stopifnot(names(md5_vector) == names(md5))
-
-names(md5_vector) <- str_replace(names(md5_vector),".tsv","")
-md5_df <- data.frame(md5_vector)
-md5_df["File.accession"] <- row.names(md5_df)
-row.names(md5_df)=NULL
-md5_df
-
-dnld_md5 <- fb_meta%>%
-  select(c(File.accession,md5sum))
-
-md5_summary_table <- left_join(dnld_md5, md5_df, by = "File.accession")
-colnames(md5_summary_table) = c("File.accession","downloaded_md5sum","generated_md5sum")
-
-md5_summary_table <- md5_summary_table%>%
-  mutate(equivalent = isTRUE(md5_summary_table$downloaded_md5sum==md5_summary_table$generated_md5sum))
-# md5_summary_table
-
-######HELP########## #TODO Troubleshoot why I'm getting False
-
-stopifnot(md5_summary_table$Downloaded_md5sum == md5_summary_table$Generated_md5sum)
 
 
-tryCatch(
-  expr = {
-    stopifnot(md5_summary_table$Downloaded_md5sum == md5_summary_table$Generated_md5sum)
-  },
-  error = function(cond){
-    message("the md5 checksums do not match")
-  }
+
+#
+#Create md5sum for each downloaded expression table
+#
+
+create_md5 <- function(path_to_dataset) {
+  #
+  #Creates an md5check sum for an inputted dataset.
+  #
+  #@param: In string, the path to the datset you want an md5checksum for
+  #     ex: "Data/Count_tables/ENCFF9760LT.tsv"
+  #@return: an md5checksum for inputted dataset
+  
+  md5 <- md5sum(path_to_dataset)
+  return(md5)
+}
+
+
+
+#
+#Create a list of md5 checksums for each data table in l_expression_tables, and name according to count table names.
+#
+
+
+l_expression_tables_md5 <- lapply(paste0(count_dir,"/",list.files(count_dir)),create_md5)
+
+count_dir_names <- list.files(count_dir)
+names(l_expression_tables_md5) <- count_dir_names
+
+#
+#Checks. Check to ensure names are all in correct order. 
+#
+
+stopifnot(identical(count_dir_names, names(l_expression_tables)))
+stopifnot(identical(count_dir_names, names(l_expression_tables_md5)))
+
+#
+#Select md5 from metadata. Create a new md5_meta table. Turn l_expression_tables_md5 into table and append to the md5_meta by File.accession
+#
+
+#TODO: Why does as.list() work here but not list(). Lists in R are complicated thats for sure
+
+md5_meta <- fb_meta%>%
+  dplyr::select(File.accession,md5sum) %>%
+  mutate(File.accession = replace(File.accession, values = paste0(fb_meta$File.accession,'.tsv')))
+  
+glimpse(md5_meta)  
+
+t_expression_tables_md5 <- data.frame(File.accession = c(names(l_expression_tables_md5)),
+                                      md5sum_downloaded = (as.vector(unlist(l_expression_tables_md5))
+                                      )
 )
 
-  
+glimpse(t_expression_tables_md5)
 
+stopifnot(all(md5_meta$File.accession %in% t_expression_tables_md5$File.accession))
 
-#------iteratively get only pc genes with expression
+md5_meta <- left_join(md5_meta,t_expression_tables_md5, "File.accession")
 
-# expr_dat <- read.delim(file = paste0(count_dir,"/","ENCFF227HKF.tsv"))
-# gene_ids <- str_replace(expr_dat$gene_id, "\\.[:digit:]", "")
-# num_pc <- table(gene_ids %in% pc$Gene_ID)
-# pc_gene_ex <- expr_dat %>%
-#   select(c(gene_id,length,expected_count))%>%
-#   mutate(gene_id = gene_ids) %>%
-#   rename(Gene_ID = gene_id) %>%
-#   filter(Gene_ID %in% pc$Gene_ID)%>%
-#   left_join(y=pc, by="Gene_ID")%>%
-#   select(c(Gene_ID,length,expected_count,Chromosome,Symbol))%>%
-#   distinct()
-# glimpse(pc_gene_ex)  
+glimpse(md5_meta)
 
+md5_meta <- md5_meta%>%
+  mutate(md5sum_downloaded = as.character(unlist(md5sum_downloaded)))
 
-get_pc_genes <- function(gen_exp_files_names) 
-  {
-  if(!(dir.exists("Data/Processed_Count_tables"))){
-    warning("Creating Data/Processed_Count_tables directory")
-    dir.create("Data/Processed_Count_tables")
-  }
-    for (i in gen_exp_files_names) { 
-      expr_dat <- read.delim(file = paste0(count_dir,"/",i))
-      gene_ids <- str_replace(expr_dat$gene_id, "\\.[:digit:]", "")
-      num_pc <- table(gene_ids %in% pc$Gene_ID)
-      pc_gene_ex <- expr_dat %>%
-        select(c(gene_id,length,expected_count))%>%
-        mutate(gene_id = gene_ids) %>%
-        rename(Gene_ID = gene_id) %>%
-        filter(Gene_ID %in% pc$Gene_ID)%>%
-        left_join(y=pc, by="Gene_ID")%>%
-        select(c(Gene_ID,length,expected_count,Chromosome,Symbol))%>%
-        distinct() %>%
-        mutate(name = i)
-      # stopifnot(gene_ids == pc_gene_ex$Gene_ID)
-      # stopifnot(nrow(pc_gene_ex)==num_pc[2])
-      # glimpse(pc_gene_ex)
-      write_tsv(x=pc_gene_ex,
-                file=paste0("Data","/","Processed_Count_tables","/","pc_gene_ex_",as.character(i)))
-    }
-}
-my_expression_tables <- list.files(count_dir)
+glimpse(md5_meta)
 
-if (is.null("Data/Processed_Count_tables")){
-  get_pc_genes(my_expression_tables)
-}
+#
+#Check if md5 is identical
+#
 
-#----------  open all processed count data
-
-# open_pro_tables <- function() {
-#   tables <- c()
-#   for (i in my_expression_tables) {
-#     print (i)
-#     name <- paste0("pro_",i)
-#     table <- read.delim(paste0("Data/Processed_Count_tables/pc_gene_ex_",i))
-#     print(name)
-#     glimpse(table)
-#     name <-  table
-#     append(x=tables, values=name)
-#   return(tables)
-#   }
-# }
-# 
-# open_pro_tables()
-
-pro_dir <- "Data/Processed_Count_tables"
-
-processed_count_tables <- paste0(pro_dir,"/",list.files(pro_dir))
-list_pro_count_tables <- lapply(processed_count_tables,read.delim)
-names(list_pro_count_tables) <- list.files(pro_dir)
-
-#todo make this more robust with regex
-stopifnot (length(list_pro_count_tables)== length(my_expression_tables))
-
-
-#---------- apply replicate metadata from google sheets
-
-replicate_meta <- read_sheet("1gFkSHD15wdd3FdCrZ51DQOi9RYQg01i1TXpIvkDVIz0")
-
-
-correct_levels <- c(10.5,11.5,12.5,13.5,14.5,15.5,16.5,0)
-
-identify_in <- function(dataframe,replicate_meta){
-  my_row <- replicate_meta[which(replicate_meta$file_dataset == dataframe$name[1]),]
-  dataframe <- dataframe%>%
-    mutate(tissue_type = factor(my_row[2]),
-           dev_stage = factor(my_row[3], levels = correct_levels),
-           replicate = factor(my_row[4]))
-}
-
-list_pro_count_tables <- lapply(list_pro_count_tables,identify_in,replicate_meta)
-# list_pro_count_tables
-# glimpse(list_pro_count_tables[1])
-# head(list_pro_count_tables[1])
-
-
-# replicate_meta[which(replicate_meta$file_dataset == "ENCFF227HKF.tsv"),]
-# list_pro_count_tables[names(list_pro_count_tables)[1]]
+stopifnot(identical(md5_meta$md5sum, md5_meta$md5sum_downloaded))
+warning("Md5 checksums were identical! Very nice")
 
 
 
-#----------- conglomerate important info into 1 master table
-# create_master_table <- function(list_of_dataframes) {
-#   master_table <- data.frame()
-#   for (i in list_of_dataframes){
-#     print(i)
-#     # print(master_table)
-#     # master_table <- rbind(master_table,i)
-#   return(master_table)
-#   }
-# }
 
-#why was that not working????
+# pc1 <- pc[1:10,]
+# pc2 <- pc[1:10,]
+# pc1$Chromosome == pc2$Chromosome
+# all(pc1$Chromosome == pc2$Chromosome)
+# identical(pc1$Chromosome, pc2$Chromosome)
 
-master_table <- data.frame()
-for (i in list_pro_count_tables){
-  # print(i)
-  # print(master_table)
-  master_table <- rbind(master_table,i)
-  # print(master_table)
-}
+#
+#Removal events
+#
+
+rm("create_md5","dnld_data","t_expression_tables_md5","md5_meta","l_expression_tables_md5","fb_gen_ex")
 
 
-nrows <-lapply(list_pro_count_tables, function(list_of_tables){nrow(list_of_tables)})
-count_table_rows <- sum(unlist(nrows))
 
-stopifnot(nrow(master_table)==count_table_rows)
-
-#---------- summary stats on master_table
-
-#todo pearson 
-
-sum_master_table <- master_table %>%
-  group_by(dev_stage,Symbol)%>%
-  mutate(replicate=as.double(replicate))%>%
-  summarize(avg_count = mean(expected_count), pearson = cor(replicate,expected_count,method="pearson"))
-
-glimpse(sum_master_table)
-
-arr_master_table <- sum_master_table %>%
-  arrange(desc(avg_count), .by_group=TRUE)
-  
-
-#------------prelim visualization
-
-library(ggplot2)
-
-sample_table <- arr_master_table %>%
-  filter(dev_stage == c(10.5,11.5),
-         avg_count > 10000)
-glimpse(sample_table)
-
-dev_stage_graph <- ggplot(sample_table)+
-  geom_col(mapping = aes(x = Symbol, y = avg_count, fill = dev_stage), position = 'dodge')+
-  theme(axis.ticks.x= element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank())
-
-  
+ 
 

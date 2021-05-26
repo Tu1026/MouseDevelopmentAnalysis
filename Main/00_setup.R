@@ -22,7 +22,6 @@ library(tidyverse)
 library(assertthat)
 library(biomaRt)
 library(tools)
-library(googlesheets4)
 
 
 
@@ -119,4 +118,19 @@ write.table(
 stopifnot(is.readable(mm_ensembl_outfile))
 
 
+#TODO how do I turn a function into its string name
+add_quotes <- function(object_name) {
+  #
+  #Add quotations to an object so that it can be removed from the env
+  #
+  #@param: name of object
+  return (paste0("'",object_name,"'"))
+}
+
+#
+#Removal Event
+#
+rm(list=ls())
+### Keep track of what scripts were run
+whats_run <- c("00")
 
