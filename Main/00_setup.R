@@ -6,8 +6,7 @@
 # Package installation
 # -----------------------------------------------------------------------------
 
-packages <- c("tidyverse", "assertthat","googlesheets4")
-
+packages <- c("tidyverse", "assertthat","googlesheets4", "skimr")
 install.packages(setdiff(packages, rownames(installed.packages())))
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -22,7 +21,7 @@ library(tidyverse)
 library(assertthat)
 library(biomaRt)
 library(tools)
-
+library(googlesheets4)
 
 
 # Download metadata tsv containing gene count table URLs
@@ -132,5 +131,4 @@ add_quotes <- function(object_name) {
 #
 rm(list=ls())
 ### Keep track of what scripts were run
-whats_run <- c("00")
 

@@ -1,18 +1,14 @@
 #
-#Requires that 01_downloaded_gene_coount_tables.R is run
 #
 
-#This script filters meta_data and will download curated metadata from google sheets and combine the two frames
-#The final meta_data table is named replicate_meta
-
-whats_run <- c(whats_run,"02")
-
-
-library(tidyverse)
+source(file = "Main/functions.R")
+source(file = "Main/libraries.R")
+source(file = "Main/global_vars.R")
+source("Main/01_download_gene_count_tables.R")
 library(googlesheets4)
 
-#TODO: What is the standards for taking tables from other pages?
-
+#This script filters meta_data and will download curated metadata from google sheets and combine it with fb_meta generated in 01. 
+#The final meta_data table is named replicate_meta
 
 #
 #Filter for File.accession and add .tsv to each File.accession id
@@ -37,6 +33,5 @@ warning("meta_data successfully downloaded")
 #
 #Removal events
 #
-rm("fb_meta_02","replicate_meta")
 
 
