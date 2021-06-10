@@ -1,12 +1,12 @@
 merge_tables <- function(pc_table,expression_df) {
   #
-  #joins the protein coding table onto the expression coding table by gene_id.
+  #joins the protein coding table onto the expression coding table by gene_id = Gene_Id.
   #
   #@param: pc_table: the protein coding table downlaoded by ensemble. Should be named "pc"
   #@param: expression_df: A given expression data frame. Should be within "l_expr_tables"
   #return: new data frame thats merged both tables merged by "gene_id" columns
-  stopifnot("gene_id" %in% names(pc_table) & "gene_id" %in% names(expression_df))
-  merged_table <- left_join(expression_df , pc_table, by = "gene_id")
+  
+  merged_table <- left_join(expression_df , pc_table, by = c("Gene_Id" = "gene_id"))
   return (merged_table)
 }
 
@@ -76,7 +76,6 @@ open_expr_tables <- function(count_dir) {
   #example: count_dir <- "Data/Count_tables"
   #@return: A list containing all of the expression table dataframes. They are named according to their name within their directory
   names_of_tables <- create_names_of_tables(count_dir)
-  warning("Opening Tables...")
   l_expr_tables <- lapply(names_of_tables,read.delim)
   names(l_expr_tables) <-  list.files(count_dir)
   return (l_expr_tables)

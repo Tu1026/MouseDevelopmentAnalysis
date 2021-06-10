@@ -1,37 +1,41 @@
-#
-#
+#This script will download curated metadata from google sheets.
+#It then opens up fb_meta, an rds object saved by 01
+#it then combines the two meta data frames
 
-source(file = "Main/functions.R")
-source(file = "Main/libraries.R")
-source(file = "Main/global_vars.R")
-source("Main/01_download_gene_count_tables.R")
+#Returns:
+#The combined is saved as an rds object named complete_meta_data
+
+#-----Must change
+#change sheet_id to your google sheet URL with the metadata on it.
+sheet_id <- "1gFkSHD15wdd3FdCrZ51DQOi9RYQg01i1TXpIvkDVIz0"
+
+library(tidyverse)
+library(assertthat)
 library(googlesheets4)
 
-#This script filters meta_data and will download curated metadata from google sheets and combine it with fb_meta generated in 01. 
-#The final meta_data table is named replicate_meta
+source(file = "Main/functions.R")
 
-#
-#Filter for File.accession and add .tsv to each File.accession id
-#
-fb_meta_02 <- fb_meta %>%
-  dplyr::select(File.accession) %>%
-  transmute(File.accession = paste0(fb_meta$File.accession,".tsv"))
-glimpse(fb_meta_02)
+#---download meta data containing replicate and dev stage info
 
-#
-#download meta_data containing replicate and dev stage info
-#
+replicate_meta <- read_sheet(sheet_id)
 
-replicate_meta <- read_sheet("1gFkSHD15wdd3FdCrZ51DQOi9RYQg01i1TXpIvkDVIz0")
+#---Open up fb_meta rds object
+tryCatch(
+  {
+    fb_meta <- readRDS(paste0('Data/fb_meta'))
+  },
+  error = function(cond) {
+    message(cond)
+    message("There was a problem reading fb_meta. If 01 was run successfully, it should be in Data/fb_meta")
+  }
+)
 
-#
-#join two tables
-#
-meta_data <- left_join(replicate_meta,fb_meta_02, by = "File.accession")
+#---join two tables
+
+meta_data <- left_join(replicate_meta, fb_meta, by = c("id" = "File.accession"))
 warning("meta_data successfully downloaded")
 
-#
-#Removal events
-#
+#---save meta_data as rds object
 
+saveRDS(meta_data, file = "Data/complete_meta_data")
 

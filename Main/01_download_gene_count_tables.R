@@ -1,24 +1,31 @@
 ## This script downloads gene count tables for the different mouse development
-## transcriptome samples
+## transcriptome samples. It also creates md5 checksum to confirm propper download
+
+#---Returns: 
+#Downloaded count tables,
+# fb_meta,a forebrain filtered version of the total meta data
+
 
 source(file = "Main/functions.R")
-source(file = "Main/libraries.R")
-source(file = "Main/global_vars.R")
-library(tools)
 
+library(tools)
+library(tidyverse)
+library(assertthat)
+
+count_dir <- "Data/Count_tables"
 file_meta <- read.delim("Data/ENCSR574CRQ_metadata.tsv", stringsAsFactors = FALSE)
 
 
 #
-# Focus on forebrain. Download gene count tables
-# -----------------------------------------------------------------------------
-
-#
 #filter experimental meta_data for gene quantification, forebrain experiments
 #
+
 fb_meta <- filter(file_meta,
              Biosample.term.name == "forebrain" &
              File.output.type == "gene quantifications")
+
+#---Save fb_meta as a rds
+saveRDS(fb_meta, file = "Data/fb_meta")
 
 #
 #Creata a Data/Count_tables directory if one does not already exist. 
@@ -34,6 +41,7 @@ if (!(dir.exists(count_dir))) {
 #
 
 fb_gen_ex <- list.files(count_dir)
+
 if (length(fb_gen_ex) != nrow(fb_meta)) {
     warning ("Expression data has not been downloaded yet. Downloading data...")
     dnld_data(fb_meta)
@@ -63,31 +71,20 @@ stopifnot(identical(count_dir_names, names(l_expression_tables_md5)))
 #Select md5 from metadata. Create a new md5_meta table. Turn l_expression_tables_md5 into table and append to the md5_meta by File.accession
 #
 
-#TODO: Why does as.list() work here but not list().
-
 md5_meta <- fb_meta%>%
   dplyr::select(File.accession,md5sum) %>%
   mutate(File.accession = replace(File.accession, values = paste0(fb_meta$File.accession,'.tsv')))
   
-glimpse(md5_meta)  
-
 t_expression_tables_md5 <- data.frame(File.accession = c(names(l_expression_tables_md5)),
                                       md5sum_downloaded = (as.vector(unlist(l_expression_tables_md5))
                                       )
 )
-
-glimpse(t_expression_tables_md5)
-
 stopifnot(all(md5_meta$File.accession %in% t_expression_tables_md5$File.accession))
 
 md5_meta <- left_join(md5_meta,t_expression_tables_md5, "File.accession")
 
-glimpse(md5_meta)
-
 md5_meta <- md5_meta%>%
   mutate(md5sum_downloaded = as.character(unlist(md5sum_downloaded)))
-
-glimpse(md5_meta)
 
 #
 #Check if md5 is identical
