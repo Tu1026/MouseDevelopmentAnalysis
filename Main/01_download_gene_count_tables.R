@@ -16,44 +16,40 @@ count_dir <- "Data/Count_tables"
 file_meta <- read.delim("Data/ENCSR574CRQ_metadata.tsv", stringsAsFactors = FALSE)
 
 
-#
+
 #filter experimental meta_data for gene quantification, forebrain experiments
-#
 
 fb_meta <- filter(file_meta,
              Biosample.term.name == "forebrain" &
              File.output.type == "gene quantifications")
 
-#---Save fb_meta as a rds
-saveRDS(fb_meta, file = "Data/fb_meta")
+#---Save fb_meta as a tsv
 
-#
+write_tsv(x = fb_meta, file = "Data/fb_meta.tsv")
+
+
 #Creata a Data/Count_tables directory if one does not already exist. 
-#
+
 if (!(dir.exists(count_dir))) {
   warning("Creating Count_Dir")
   dir.create(count_dir)
 }
 
 
-#
 #Deciding if dnld_data needs to be executed, or if data has already been downloaded
-#
 
 fb_gen_ex <- list.files(count_dir)
 
 if (length(fb_gen_ex) != nrow(fb_meta)) {
-    warning ("Expression data has not been downloaded yet. Downloading data...")
+    message ("Expression data has not been downloaded yet. Downloading data...")
     dnld_data(fb_meta)
   } else { 
-    warning ("Expression data has already been downloaded")
+    message ("Expression data has already been downloaded")
 }
 
 
 
-#
 #Create a list of md5 checksums for each data table in l_expression_tables, and name according to count table names.
-#
 
 
 l_expression_tables_md5 <- lapply(paste0(count_dir,"/",list.files(count_dir)), create_md5)
@@ -91,7 +87,7 @@ md5_meta <- md5_meta%>%
 #
 
 stopifnot(identical(md5_meta$md5sum, md5_meta$md5sum_downloaded))
-warning("Md5 checksums were identical! Very nice")
+message("Md5 checksums were identical! Very nice")
 
 
 
