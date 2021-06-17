@@ -20,7 +20,6 @@ sheet_id <- "1gFkSHD15wdd3FdCrZ51DQOi9RYQg01i1TXpIvkDVIz0"
 
 replicate_meta <- read_sheet(sheet_id)
 
-
 #---Open up fb_meta rds object
 
 if (file.exists(paste0('Data/fb_meta.tsv'))) {
@@ -38,4 +37,3 @@ message("meta_data successfully downloaded")
 #---save meta_data as tsv
 
 write_tsv(x = meta_data, file = "Data/complete_meta_data.tsv")
-

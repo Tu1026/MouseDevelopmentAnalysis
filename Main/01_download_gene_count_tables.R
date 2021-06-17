@@ -88,9 +88,3 @@ md5_meta <- md5_meta%>%
 
 stopifnot(identical(md5_meta$md5sum, md5_meta$md5sum_downloaded))
 message("Md5 checksums were identical! Very nice")
-
-
-
-
- 
-
