@@ -64,22 +64,7 @@ create_names_of_tables<- function(count_dir) {
 }
 
 
-#
-#Open a list of tables using the return of create_list_of_tables
-#
 
-open_expr_tables <- function(count_dir) {
-  #
-  #creates a list containg all expression table dataframes
-  #
-  #@param: String of the directory name where data frames live. This is passed into create_names_of_tables.
-  #example: count_dir <- "Data/Count_tables"
-  #@return: A list containing all of the expression table dataframes. They are named according to their name within their directory
-  names_of_tables <- create_names_of_tables(count_dir)
-  l_expr_tables <- lapply(names_of_tables,read.delim)
-  names(l_expr_tables) <-  list.files(count_dir)
-  return (l_expr_tables)
-}
 
 remove_gene_id_vers <- function(data_frame) {
   #
