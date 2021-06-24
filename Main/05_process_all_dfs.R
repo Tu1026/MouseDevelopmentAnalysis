@@ -110,7 +110,6 @@ test_orders <- function(l_with_symbols) {
 }
 
 
-   
 create_data_matrix <- function(l_with_symbols, dimnames) {
   matrix = (l_with_symbols[[1]]$TPM)
             
