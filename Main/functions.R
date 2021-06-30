@@ -64,17 +64,19 @@ create_names_of_tables<- function(count_dir) {
 }
 
 
-
-
 remove_gene_id_vers <- function(data_frame) {
   #
   #Removes the version ids of the gene_id column within all expr tables
   #
   #@param : data frame for expression
   #@return : data frame with gene_id versions removes
-  data_frame$gene_id <- str_replace(data_frame$gene_id, "\\.[:digit:]*", "")
+  data_frame$Gene_ID <- str_replace(data_frame$Gene_ID, "\\.[:digit:]*", "")
   return(data_frame)
 }
+
+
+
+
 #
 #Generating Positive and Negative Checks for remove_gene_id_vers()
 #
@@ -169,5 +171,51 @@ generate_filter_plot <- function(list_of_sum_stats) {
   df <- data.frame(names = factor(names, levels = names), 
                    values = values)
   return (ggplot(df) + geom_col(mapping = aes(x=names, y=values)))
+}
+
+
+open_expr_table <- function(expression_table.tsv,
+                            target_directory,
+                            opening_order) {
+  #open a single  experession table. 
+  #expression_table.tsv = the name of the expression table you wish to open as string
+  #target_directory = the directory where the expression table is saved, as string
+  #column_names = the column names you wish to open the expression table as. 
+  #Setting this as a vector will ovverwite the default names, a vector strings
+  #opening_order is a 
+  
+  tryCatch(
+    {
+      table <- read.delim(file = paste0(target_directory,"/",expression_table.tsv), 
+                          sep = "\t",
+                          col.names = c(
+                            "Gene_ID",  # gene_id -> Gene_ID to be consistent with pcoding
+                            "transcript_id.s.",
+                            "length",
+                            "effective_length",
+                            "expected_count",
+                            "TPM",
+                            "FPKM",
+                            "posterior_mean_count",
+                            "posterior_standard_deviation_of_count",
+                            "pme_TPM",
+                            "pme_FPKM",
+                            "TPM_ci_lower_bound",
+                            "TPM_ci_upper_bound",
+                            "FPKM_ci_lower_bound",
+                            "FPKM_ci_upper_bound"))
+      return(table)
+    },
+    error = function(cond){
+      message(cond)
+      warning(paste( expression_table.tsv, "could not be opened"))
+      return("Missing Table")
+    },
+    warning = function(cond){
+      message(cond)
+      warning(paste( expression_table.tsv, "could not be opened"))
+      return("Missing Table")
+    }
+  )
 }
 

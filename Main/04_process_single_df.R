@@ -2,7 +2,7 @@
 # l_expr_tables is opened, and a test_frame is selected from it
 # remove gene id versions from test data frame
 # merge test data frame with pc table. Name it test_merged
-# It then processes the test data frame. This processing will create a df containing expressed genes
+# It then processes the test data frame. This processing will create a df containing Measured genes
 # Get some visualization about the filtering is generated.
 # Get some summary statistics about our data frame
 
@@ -16,32 +16,20 @@ library(tidyverse)
 library(assertthat)
 library(skimr)
 
-#---Open l_expr_tables
-
-if (file.exists(file = "Data/l_expr_tables.rds")) {
-  message("Found l_expr_tables.rds, opening...")
-  l_expr_tables <- readRDS(file = "Data/l_expr_tables.rds")
-} else {
-  message("Couldn't find l_expr_tables rds object. Should have been generated in 01")
-}
+#---Open one of the count tables
+target_directory <- "Data/Count_tables"
+count_table_names <- list.files(path = "Data/Count_tables")
+#-index is the frame that you are selecting from l_expr_tables
+index <- 3
+test_frame_name <- count_table_names[[index]]
+test_frame <- open_expr_table(test_frame_name, target_directory)
 
 #---Create place to save results
 if (!dir.exists("Data/test_frame_analysis")) {
   dir.create("Data/test_frame_analysis")
 }
 
-#---Select 1 table from l_expr_tables. Save it as an rds object for later use
-#-index is the frame that you are selecting from l_expr_tables
-index <- 3
-test_frame <- l_expr_tables[[index]]
               
-#---Running remove_gene_id_vers on test data frame to remove the gene IDs
-#-the expression count tables have gene_id versions, for example, the ".10" in "ENSMUSG00000031965.10"
-#-these are artifacts of Ensemble updating the gene versions. They must be removed in order to merch with the protein coding table,
-#-which does not have the version ids
-
-test_frame <- remove_gene_id_vers(test_frame)
-
 #---Open pc table
 
 if (file.exists(file = "Data/ensembl_mouse_protein_coding_104.tsv")) {
@@ -52,18 +40,38 @@ if (file.exists(file = "Data/ensembl_mouse_protein_coding_104.tsv")) {
 }
 
 #---------------------------------------------------------------------------
+#---Running remove_gene_id_vers on test data frame to remove the gene IDs
+#---------------------------------------------------------------------------
+#-the expression count tables have gene_id versions, 
+#for example, the ".10" in "ENSMUSG00000031965.10"
+#-these are artifacts of Ensemble updating the gene versions. T
+# they must be removed in order to merge with the protein coding table
+# via Gene_ID, which does not have the version ids
+
+test_frame <- remove_gene_id_vers(test_frame)
+
+
+#---------------------------------------------------------------------------
 #Perform some minor processing on the protein coding table (pc)
 #---------------------------------------------------------------------------
 
-#---Remove nondistinct from pc table and select only gene id and symbol, the relevant columns.
+#---Remove nondistinct Symbols and Gene_IDs from pc table and select only gene id and symbol, the relevant columns.
 pc_sub <- pc %>% 
+  select(Gene_ID, Symbol)%>%
   distinct(Gene_ID, .keep_all = TRUE) %>% 
-  select(Gene_ID, Symbol)
+  distinct(Symbol, .keep_all = TRUE)
 
-#---Identifying gene_ids with more than 1 symbol.
+#---Why we also remove duplicate Symbols...
 #-The protein coding gene has some 20 Symbols that correspond to more than 1 gene_id. 
-#-As the rest of the processing deals focuses on merging via gene_id, and not symbol, these 20 Symbols were left as is associated
-#-with their various unique gene ids.
+#-As the rest of the processing deals focuses on merging via gene_id, and not symbol
+#For example: Aldoa,
+#http://uswest.ensembl.org/Mus_musculus/Gene/Summary?db=core;g=ENSMUSG00000114515;r=7:126399962-126408280
+#http://uswest.ensembl.org/Mus_musculus/Gene/Summary?db=core;g=ENSMUSG00000030695;r=7:126394406-126399923
+#Both are the same gene symbol, but have different gene IDs. 
+#For simplicity sake, we will indescretely remove Gene_IDs until each Symbol has only 1 Gene_ID
+
+
+# these 20 Symbols were left as is associated with their various unique gene ids.
 pc_sub_duplicates <- pc_sub %>%
   filter(duplicated(Symbol))%>%
   filter(Symbol !="")%>%
@@ -73,22 +81,26 @@ pc_sub_duplicates <- pc_sub %>%
 #---------------------------------------------------------------------------
 #merge pc table onto the expression test frame
 #---------------------------------------------------------------------------
+# Protein coding (pc) table must be merged onto the test frame so that
+# protein coding genes can be identified from our measured RNAseq reads.
 
 test_merged <- test_frame %>%
-  dplyr::rename(Gene_ID = gene_id) %>% 
   left_join(y = pc_sub, by = "Gene_ID") %>% 
   relocate(Symbol, .after = Gene_ID)
 
 #---------------------------------------------------------------------------
 #Looking at breakdown of protein coding genes that did not join on to the count table
 #---------------------------------------------------------------------------
-# A quick glance at the protein coding genes that were not expressed in the count table shows that many were
+# A quick glance at the protein coding genes that were not Measured in the count table shows that many were
 # Olfactory proteins, and RIKEN-named genes
 did_not_join <- filter(pc_sub, !pc_sub$Gene_ID %in% test_merged$Gene_ID)
 
 #---------------------------------------------------------------------------
-# This part of the  script processes 1 merged expression - pc data frame. Into gene_ids with symbols(pc), and gene_ids without symbols
+#Processe the merged data frame. Into gene_ids with symbols(pc), and gene_ids without symbols
 #---------------------------------------------------------------------------
+#We want to identify the Gene_IDs that are protein coding; thus we 
+#are filtering for genes with symbols.
+#We also will identify the Gene_IDs without symbols just to identify and explore
 
 #---get a data frame of all the empty symbols
 
@@ -115,10 +127,9 @@ n_groups <- test_merged%>%
   nrow()
 stopifnot(nrow(with_symbols) == n_groups)
 
-#---Save with_Symbols as an RDS object
-saveRDS(with_symbols, file = "Data/test_frame_analysis/merged_with_Symbols.Rds")
-
-
+#---Save with_Symbols as a TSV
+test_frame_name <- str_replace(test_frame_name, pattern = ".tsv", replacement = "")
+write_tsv(with_symbols, file = paste0("Data/test_frame_analysis/",test_frame_name,"_expression_symbols.tsv"))
 
 #---------------------------------------------------------------------------
 # This part of the script is for generating Alex-requested summary stats
@@ -146,14 +157,14 @@ names <- factor(x = c("Size of PC Table",
                       "Num Gene Id's that didn't match", 
                       "Num Gene Id's that matched", 
                       "Size of Merged Count Table", 
-                      "Num of Expressed Proteins with Symbols", 
-                      "Num of Expressed Proteins without Symbols"),
+                      "Num of Measured Proteins with Symbols", 
+                      "Num of Measured Proteins without Symbols"),
                 levels = c("Size of PC Table", 
                            "Num Gene Id's that didn't match", 
                            "Num Gene Id's that matched", 
                            "Size of Merged Count Table", 
-                           "Num of Expressed Proteins with Symbols", 
-                           "Num of Expressed Proteins without Symbols"))
+                           "Num of Measured Proteins with Symbols", 
+                           "Num of Measured Proteins without Symbols"))
 
 lengths <- c(nrow(pc_sub), 
              n_not_matched_pc_table, 
@@ -164,16 +175,21 @@ lengths <- c(nrow(pc_sub),
 
 df_summary_stats <- data.frame(x = names, y = lengths)
 
+
 pl_summary_stats <- ggplot(df_summary_stats) +
   geom_col(mapping = aes(x = names, y = lengths))+
-  labs(title = names(l_expr_tables)[[index]])+
+  labs(title = test_frame_name)+
   xlab("Summary Stats")+
   ylab("Counts of Gene Id\'s")+
   theme(axis.text.x = element_text(angle = 60, hjust = 1))
 pl_summary_stats
   
-write_delim(df_summary_stats, file = paste0("Data/test_frame_analysis/",names(l_expr_tables)[[index]],"df.tsv"), delim = "\t" )
-ggsave(file = paste0("Data/test_frame_analysis/",names(l_expr_tables)[[index]],"plot.png"), plot = pl_summary_stats)
+write_delim(df_summary_stats,
+            file = paste0("Data/test_frame_analysis/", test_frame_name,"_df.tsv"),
+            delim = "\t" )
+ggsave(file = paste0("Data/test_frame_analysis/"
+                     ,test_frame_name,"_plot.png"),
+       plot = pl_summary_stats)
 
 #--------------End 
 
@@ -190,7 +206,7 @@ ggsave(file = paste0("Data/test_frame_analysis/",names(l_expr_tables)[[index]],"
 
 #----------ARCHIVE---------------
 # names <- c("Protein Coding Table", "Expression Table", "Merged Frame", "Transcripts with Symbol",
-#            "Transcripts with no Symbol", "Unique Expressed Genes")
+#            "Transcripts with no Symbol", "Unique Measured Genes")
 # names <- factor(names, levels = names)
 # 
 # lengths <- c(nrow(pc), nrow(test_frame), nrow(test_merged), n_pc_expr_1_Sym, n_pc_expr_1_noSym, nrow(test_merged_uniq))
