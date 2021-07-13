@@ -52,7 +52,7 @@ if (length(fb_gen_ex) != nrow(fb_meta)) {
 #Create a list of md5 checksums for each data table in l_expression_tables, and name according to count table names.
 
 
-l_expression_tables_md5 <- lapply(paste0(count_dir,"/",list.files(count_dir)), create_md5)
+l_expression_tables_md5 <- lapply(paste0(count_dir,"/",list.files(count_dir)), md5sum)
 
 count_dir_names <- list.files(count_dir)
 names(l_expression_tables_md5) <- count_dir_names

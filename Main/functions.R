@@ -29,21 +29,31 @@ dnld_data <- function(fb_meta) {
   }
 }
 
-#
-#Create md5sum for each downloaded expression table
-#
-
-create_md5 <- function(path_to_dataset) {
-  #
-  #Creates an md5check sum for an inputted dataset.
-  #
-  #@param: In string, the path to the datset you want an md5checksum for
-  #     ex: "Data/Count_tables/ENCFF9760LT.tsv"
-  #@return: an md5checksum for inputted dataset
-  
-  md5 <- md5sum(path_to_dataset)
-  return(md5)
+test_orders <- function(l_expr_symbols) { 
+  reference_frame <- l_expr_symbols[[1]]$Symbol 
+  for (frame_index in 1:length(l_expr_symbols)) {
+    test_frame <- l_expr_symbols[[frame_index]]$Symbol
+    stopifnot(all(reference_frame == test_frame))
+  }
+  message("The order of all symbols within l_expr_symbols is the same")
+  return(TRUE)
 }
+
+# #
+# #Create md5sum for each downloaded expression table
+# #
+# 
+# create_md5 <- function(path_to_dataset) {
+#   #
+#   #Creates an md5check sum for an inputted dataset.
+#   #
+#   #@param: In string, the path to the datset you want an md5checksum for
+#   #     ex: "Data/Count_tables/ENCFF9760LT.tsv"
+#   #@return: an md5checksum for inputted dataset
+#   
+#   md5 <- md5sum(path_to_dataset)
+#   return(md5)
+# }
 
 
 #
@@ -184,9 +194,7 @@ open_expr_table <- function(expression_table.tsv,
   #Setting this as a vector will ovverwite the default names, a vector strings
   #opening_order is a 
   
-  tryCatch(
-    {
-      table <- read.delim(file = paste0(target_directory,"/",expression_table.tsv), 
+  table <- read.delim(file = paste0(target_directory,"/",expression_table.tsv), 
                           sep = "\t",
                           col.names = c(
                             "Gene_ID",  # gene_id -> Gene_ID to be consistent with pcoding
@@ -205,17 +213,20 @@ open_expr_table <- function(expression_table.tsv,
                             "FPKM_ci_lower_bound",
                             "FPKM_ci_upper_bound"))
       return(table)
-    },
-    error = function(cond){
-      message(cond)
-      warning(paste( expression_table.tsv, "could not be opened"))
-      return("Missing Table")
-    },
-    warning = function(cond){
-      message(cond)
-      warning(paste( expression_table.tsv, "could not be opened"))
-      return("Missing Table")
-    }
-  )
 }
+
+merge_count_pc <- function(count_table, pc_sub) { 
+  #merge a count table onto the pc table
+  merged_table <- count_table %>%
+    left_join(y = pc_sub, by = "Gene_ID") %>% 
+    relocate(Symbol, .after = Gene_ID)
+  return (merged_table)
+}
+
+get_genes_with_symbols <- function(merged_table) {
+  #---Return a table containing the transcripts that have a protein symbol
+  with_symbols <- filter(merged_table,!(is.na(Symbol)))
+  return (with_symbols)
+}
+
 
