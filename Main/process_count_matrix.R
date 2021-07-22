@@ -1,8 +1,14 @@
+# install.packages("preprocessCore")
+
 library(tidyverse)
 library(assertthat)
 library(stringr)
 library(Hmisc)
 library(corrplot)
+# library(preprocessCore)
+library(cowplot)
+
+source('Main/functions.R')
 
 
 #---------------------------------------------------------------------------
@@ -12,6 +18,10 @@ library(corrplot)
 count_matrix <- readRDS(file = "Data/pc_count_matrix.rds")
 avg_count_matrix <- readRDS(file = "Data/avg_pc_count_matrix.rds")
 diff_count_matrix <- readRDS(file = "Data/diff_pc_count_matrix.rds")
+meta_data <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE, sep = "\t")
+
+
+
 
 
 #---------------------------------------------------------------------------
@@ -22,13 +32,13 @@ diff_count_matrix <- readRDS(file = "Data/diff_pc_count_matrix.rds")
 
 # Also generate correlation matrix's p-values
 
-pear_correlation_matrix_rcorr_object <- rcorr(count_matrix, type = "pearson")
-pear_correlation_matrix <- pear_correlation_matrix_rcorr_object$r
-pear_correlation_matrix_pvalues <- pear_correlation_matrix_rcorr_object$P
+pear_rcorr_object <- rcorr(count_matrix, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
 
 #---Generating heatmap for sample correlation matrix
 
-pear_heatmap <- heatmap(x = pear_correlation_matrix,
+pear_heatmap <- heatmap(x = pear_matrix,
                    sym = TRUE,
                    Rowv = NA,
                    Colv = NA, 
@@ -42,13 +52,13 @@ pear_heatmap <- heatmap(x = pear_correlation_matrix,
 
 # Also generate correlation matrix's p-values
 
-spear_correlation_matrix_rcorr_object <- rcorr(count_matrix, type = "spearman")
-spear_correlation_matrix <- spear_correlation_matrix_rcorr_object$r
-spear_correlation_matrix_pvalues <- spear_correlation_matrix_rcorr_object$P
+spear_rcorr_object <- rcorr(count_matrix, type = "spearman")
+spear_matrix <- spear_rcorr_object$r
+spear_matrix_pvalues <- spear_rcorr_object$P
 
 #---Generating heatmap for sample correlation matrix
 
-spear_heatmap <- heatmap(x = spear_correlation_matrix,
+spear_heatmap <- heatmap(x = spear_matrix,
                         sym = TRUE,
                         Rowv = NA,
                         Colv = NA, 
@@ -80,14 +90,17 @@ for (check_number in 1:5) {
 # On the other hand, the spearman correlation stays relatively constant
 # as the mouse samples progress through the dev stages
 
-# This is likely due to the fact that the spearman correlation is correlating
-# pair-wise values which are paired with respect to count.
 # Whereas the pearson is correlating pair-wise values which are paired with 
-# respect to the Gene Symbols
+# respect to the Gene Symbols. It also assumes that both samples are normally
+# distributed. The decrease of correlation coefficients across dev stages
+# suggests that expression is changing. However the high correlation between
+# replicates and close dev stages suggests the quality of the replicates
+# and data is strong
 
-# These observations suggest that the expression of several genes changes
-# throughout the developmental stages. However, the magnitude of expression
-# remains relatively constant
+# The high spearmen correlation coefficients suggest that all samples
+# have a storng monotonic relationship. 
+
+
 
 
 #---------------------------------------------------------------------------
@@ -153,10 +166,11 @@ E105 <- diff_count_matrix[, colnames(diff_count_matrix)[1]]
 E105_df <- data.frame("E105" = E105)
 E105_df <- arrange(E105_df, desc(E105_df$E105))
 
-E105_hist <- ggplot(E105_df, aes(x = E105)) + 
-  geom_histogram(binwidth = 10) +
-  labs( title = "E105 most differentially expresed genes") +
-  scale_y_continuous(trans = "log10")
+summary(E105_df)
+summary(log10(E105_df+1))
+E105_hist <- ggplot(log10(E105_df+1), aes(x = E105)) + 
+  geom_histogram(bins=100) +
+  labs( title = "E105 most differentially expresed genes")
 E105_hist
 
 l_most_diff_genes <- list("E105" = head(E105_df, n = 10))
@@ -171,8 +185,8 @@ get_most_diff <- function(column) {
   return(top_n(arranged_df, n = 10))
 }
 
-most_diff_genes <- apply(diff_count_matrix, MARGIN = 2, FUN = get_most_diff)
-
+most_diff_genes <- apply(count_matrix, MARGIN = 2, FUN = get_most_diff)
+most_diff_genes
 
 #---------------------------------------------------------------------------
 # Identifying most expressed genes across samples
@@ -198,7 +212,7 @@ get_most_expr<- function(column) {
   return(top_n(arranged_df, n = 10))
 }
 
-most_expr_genes <- apply(avg_count_matrix, MARGIN = 2, FUN = get_most_expr)
+most_expr_genes <- apply(count_matrix, MARGIN = 2, FUN = get_most_expr)
 
 
 #---------------------------------------------------------------------------
@@ -228,121 +242,375 @@ never_expressed_genes <- avg_count_matrix[  avg_count_matrix[ , 1] <= 1 &
                         avg_count_matrix[ , 7] <= 1 &
                         avg_count_matrix[ , 8] <= 1 , ]
 
+
+
 #---------------------------------------------------------------------------
-# Defining a lowly expressed gene
+# Do the samples need to be quantile normalized
 #---------------------------------------------------------------------------
 
-# Maybe a lowly expressed gene is in the 10th percentile for expression
+count_matrix <- log10(count_matrix+1)
+
+for (i in 1:ncol(count_matrix)) {  # rest of the samples
+  lines(density(count_matrix[, i]), col = "black")
+}
+
+# Density is very similar for all samples. Quantile normalization is not really 
+# required
+
+# For the rest of the exploration we will be working with the log values 
+# of the count matrix
+
+#---------------------------------------------------------------------------
+# Summarizing Gene Expression across rows and constructing matrix
+#---------------------------------------------------------------------------
+
+summary <- summary(count_matrix[,])
+
+row_sum <- rowSums(count_matrix)
+summary(row_sum)
+
+row_mean <- rowMeans(count_matrix)
+summary(row_mean)
+
+row_stdev <- rowSD(count_matrix)
+
+row_rel_sd <- row_stdev/row_mean
+
+summary_matrix <- matrix(c(row_sum, row_mean, row_stdev, row_rel_sd),
+                         nrow = length(row_sum),
+                         ncol = 4)
+colnames(summary_matrix) <-  c("row_sum",
+                               "row_mean",
+                               "row_stdev",
+                               "row_rel_sd")
+rownames(summary_matrix) <-  names(row_sum)
+
+#---------------------------------------------------------------------------
+# mean variance plot for al lgenes
+#---------------------------------------------------------------------------
+
+plot(row_mean, row_stdev)
+
+head(sort(row_rel_sd, decreasing = TRUE), n = 1000)
+
+row_rel_sd
+head(row_rel_sd)
+
+row_stdev["Clec2g"]
+row_mean["Clec2g"]
+row_rel_sd["Clec2g"]
+
+row_stdev["Clec2g"]/row_mean["Clec2g"]
 
 
-# It could also be 2 stdeviations below the mean of expression
+# The genes with the highest relative standard deviation might be of the greatest
+# interest as they might vary significantly. Indicating that they 
+# change throughout development, which suggests that they are tightly regulated
+# and important to development.
 
-avg_count_matrix 
+# Question: Why are they all converging at 4? ?????
 
 
+#---------------------------------------------------------------------------
+# Genes that are never expressed
+#---------------------------------------------------------------------------
+
+# If a gene's row summary is equal to 0, then we are saying 
+# that it was never expressed
 
 
+never_expressed_genes <- row_sum [row_sum == 0]
+
+expressed_genes <- row_sum[row_sum != 0]
+expressed_genes
+
+expressed_row_mean <- row_mean [ row_sum !=0 ]
+expressed_row_sd <- row_stdev [ row_sum !=0 ]
+expressed_row_rel_sd <- row_rel_sd [ row_sum !=0]
+
+#---------------------------------------------------------------------------
+# mean variance plot for expressed genes
+#---------------------------------------------------------------------------
+
+plot(expressed_row_mean, expressed_row_sd)
+#It actually doesn't change because I imagine the 0s are already taken out for
+# previous mean variance plot anyways
+
+df_rel_sd <- data.frame(expressed_row_rel_sd)
+ggplot(df_rel_sd) + 
+  geom_histogram(mapping = aes(expressed_row_rel_sd))
 
 
-# lowly_expressed_genes <- matrix(,
-#                                 nrow = 10000,
-#                                 ncol = ncol(avg_count_matrix)
-# )
+head(sort(expressed_row_rel_sd, decreasing = TRUE), n = 1000)
+
+summary_matrix [names(sort(summary_matrix[,4], decreasing = TRUE)), ]
+
+# Notably, all of the higehst mean variance genes have really low expression
+
+
+#---------------------------------------------------------------------------
+# Investigatging Clec2g
+#---------------------------------------------------------------------------
+# I've chosen this gene artibrarily. Just to see what it looks like over time
+
+count_matrix["Clec2g",]
+
+# as expected, there is very little expression over time. It does change
+# but its hard to make any actual assumptions here. 
+# Supposedly it Inhibits osteoclast formation.
+
+# Because all of the top mean variance have very small expressions. I'm 
+# going to only look at mean variances where the expressions are above the 
+# 25th percentile of avg expression
+
+
+#---------------------------------------------------------------------------
+# Investigating mean - variance for genes above 25% percentile for avg expression
+#---------------------------------------------------------------------------
+first_quartile <- summary(row_mean)[2]
+
+
+summary_matrix_high <- summary_matrix[row_mean >=  first_quartile,]
+summary_matrix_high
+
+df_summary_matrix_high <- data.frame(summary_matrix_high)
+ggplot(df_summary_matrix_high) + 
+  geom_histogram(mapping = aes(row_rel_sd))
+
+summary_matrix_high <- summary_matrix_high [names(sort(summary_matrix_high[,4], decreasing = TRUE)), ]
+
+top_5_percent <- summary_matrix_high[ 1 : (0.05*nrow(summary_matrix_high)),]
+rownames(top_5_percent) <- rownames(summary_matrix_high[1 : (0.05*nrow(summary_matrix_high)),])
+
+# top_5_percent has the top 5% highest mean_variances
+
+#---------------------------------------------------------------------------
+# Investigating high mean variances
+#---------------------------------------------------------------------------
+
+#Bpifa1 : gram-negative defence in airways
+# I'd expect it to be present later on when nasal passages have formed
+
+tfs <- rownames(top_5_percent[1:50,])
+tfs
+top_5_percent[50:60,]
+
+plot_list <- lapply(tfs, function(x) {
+  
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x)
+})
+names(plot_list) <- tfs
+
+# test_intervals <- list(c(1:10),
+#                     c(11:20),
+#                     c(21:30),
+#                     c(31:40),
+#                     c(41:50),
+#                     c(51:60),
+#                     c(61:70),
+#                     c(71:80),
+#                     c(81:90),
+#                     c(91:100))
+# n <- 1
+# while (n+10 <100) {
+#   y <- n+10
 # 
-# 
-# colnames(lowly_expressed_genes) <- colnames(avg_count_matrix)
-                                
-# for (column_name in colnames(lowly_expressed_genes)) {
-#   lowly_expressed_genes[, column_name] <- 
-#     avg_count_matrix[avg_count_matrix[, column_name] <= 1, column_name]
+#   tfs <- rownames(top_5_percent[n:y,])
+#   
+#   plot_list <- lapply(tfs, function(x) {
+#     
+#     df <- data.frame(Counts = count_matrix[x, ],
+#                      Dev_stage = meta_data$dev_stage)
+#     
+#     df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+#     
+#     ggplot(df, aes(y = Counts, x = Dev_stage)) +
+#       geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+#       ggtitle(x)
+#   })
+#   names(plot_list) <- tfs
+#   
+#   view(plot_grid(plotlist = plot_list, nrow = 2, ncol = 5))
+#   
+#   n <- n+10
 # }
+# I'm not sure why the plots arn't showing up in this while loop
+
+ #It seems like most of these just have high variances because they have outliers
+# Likely need to find a way to filter out genes that don't have outliers. But 
+# you can't really determine which are outliers because there's only n=2 for each 
+# dev stage. 
 
 
+# VIP looks like it makes sense as its a gstrointestinal gene. So it makes sense
+# that it is expressed so highly in P0
 
-#---------------------------------------------------------------------------
-# Compressing Metadata 
-#---------------------------------------------------------------------------
-# Not sure if there are betters ways to extract specific columns from matrices,
-# But this is the best I could do
-# I'm literally just trying to figure out how to link the replicates onto the expression matrix columns
-
-matrix_c_names <- colnames(count_matrix)
-
-
-meta_data_group <- meta_data %>%
-  select(id, dev_stage) %>%
-  group_by(dev_stage)%>%
-  dplyr::summarize(ids = str_split(paste(id, collapse = ","), pattern = ","))
-rownames(meta_data_group) <- meta_data_group$dev_stage
-
-indexes <- list()
-for (i in meta_data_group$dev_stage) {
-  row <- meta_data_group[i,]
-  names <- unlist(row$ids)
-  cur_indexes <- which(matrix_c_names == names)
-  indexes <- append(indexes,list(cur_indexes))
-}
-
-indexes_almost_merged <- do.call(rbind, indexes)
-meta_data_group <- meta_data_group %>%
-  mutate(index1 = indexes_almost_merged[,1],
-         index2 = indexes_almost_merged[,2])
-
-#---------------------------------------------------------------------------
-# Comparing reads between replicates
-#---------------------------------------------------------------------------
-
-
-#-------doing for 1
-
-e105 <- meta_data_group["e10.5",]
-e105 <- unlist(e105$ids)
-indexes <- which(matrix_col_names == e105)
-
-extract_matrix_columns <- function(index, count_matrix) {
-  return (count_matrix[,index])
-}
-
-e105_count_matrix <- do.call(cbind, lapply(indexes, 
-                                           extract_matrix_columns,
-                                           count_matrix))
-
-replicate_differences <- abs(e105_count_matrix[,1] - e105_count_matrix[,2])
-
-#-------Doing for all count tables
-
-
-master_diff_matrix <- matrix(data = 0,
-                             nrow = nrow(count_matrix), 
-                             ncol = nrow(meta_data_group),   
-                             dimnames =  list(rownames(count_matrix), meta_data_group$dev_stage))
-for (i in 1:nrow(meta_data_group)) {
-  row <- meta_data_group[i,]
-  matrixcol1 <- count_matrix[,row$index1]
-  matrixcol2 <- count_matrix[,row$index2]
-  replicate_diff <- abs(matrixcol1-matrixcol2)
-  master_diff_matrix[,i] <-  replicate_diff
-}
+# I'm going to 
 
 
 #---------------------------------------------------------------------------
-# Averaging Replicates
+# Exploring cell types and organism parts
+#--------------------------------------------------------------------------
+
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5754028/
+# hippocampus dev begins at E11
+
+# http://hippocampome.org/php/markers.php
+# Compile positive markers
+
+tfs <- c("Calb1","Nrgn","Actn2")
+plot_list <- lapply(tfs, function(x) {
+  
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)
+
+# For Calb1 and Nrgn, you can actually see that they increse at 11.5
+# Calb1 increase significantly at E11.5, Whereas Nrgn starts increasing at 11.5
+# So you can sortof see CA1 Pyramidal formation
+
+# Compile negative markers
+tfs <- c("Calb2","Pvalb","Cck","Sst","Htr3a", "Reln")
+plot_list <- lapply(tfs, function(x) {
+  
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)
+
+count_matrix["Calb2",]
+
+# Unfortunately all of these negative markers don't seem to be decreasing over time.
+# its possible these markers may be negative for hippocampus, but 
+# they may be positive for other things.
+
+# I realize that i'm stupid for choosing hippocakmpus because 
+# our samples are all forebrain. oops
+
+
 #---------------------------------------------------------------------------
-# again I'm fkinda floundering here. I bet there's better ways 
+# Exploring cell types of the forebrain
+#--------------------------------------------------------------------------
 
-#----doing for all count tables
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5095704/
 
-master_avg_matrix <- matrix(data = 0 , 
-                            ncol = nrow(meta_data_group),
-                            nrow = nrow(count_matrix), 
-                            dimnames =  list(rownames(count_matrix), 
-                                             meta_data_group$dev_stage))
+#Basal forbrain has 3 common cell types
 
-for (i in 1:nrow(meta_data_group)) {
-  row <- meta_data_group[i,]
-  matrixcol1 <- count_matrix[,row$index1]
-  matrixcol2 <- count_matrix[,row$index2]
-  matrix_combined <- cbind(matrixcol1, matrixcol2)
-  replicate_avg <-  round(rowMeans(matrix_combined), digits = 3)
-  master_avg_matrix[,i] <-  replicate_avg
-}
+#cholinergic
+#glutamatergic
+#GABAergic
+
+
+# --- Exploring Cholinergic Neuons
+
+#https://www.abcam.com/neuroscience/cholinergic-neuron-markers-and-their-functions
+
+#Markers: 
+#Choline acetyltransferase (ChAT)
+#Vesicular acetylcholine transporter(VACht) 
+# Acetylcholinesterase
+
+tfs <- c("Chat","Slc18a3","Ache")
+plot_list <- lapply(tfs, function(x) {
+  
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)
+
+# Nice trend increase in cholinergic neuron markers
+
+
+
+
+# --- Exploring glutamatergic Neurons
+# Glutamate is the neurotransmitter
+
+#Markers: https://www.abcam.com/neuroscience/glutamatergic-neuron-markers-and-their-functions
+
+#vGluT2: "Slc17a6"
+#vG1uT1: Slc17a7
+#NMDAR1: Grin1
+#NMDAR2B: Grin2b
+
+tfs <- c("Slc17a6", "Slc17a7", "Grin2b", "Grin1")
+
+plot_list <- lapply(tfs, function(x) {
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)
+
+
+# --- Exploring GABAergic Neurons
+
+
+#Markers:https://www.abcam.com/neuroscience/gabaergic-neuron-markers-and-their-functions
+
+#
+#Gat1: Slc6a1
+#Gaba receptor 1: Gabbr1
+#Gaba receptor 2: Gabbr2
+# Glutamate decarboxylase isoforms65 : Gad2
+#Glutamate decarboxylase isoforms 67: Gad1
+
+tfs <- c("Slc6a1", "Gabbr1", "Gabbr2", "Gad2", "Gad1")
+
+plot_list <- lapply(tfs, function(x) {
+  df <- data.frame(Counts = count_matrix[x, ],
+                   Dev_stage = meta_data$dev_stage)
+  
+  df$Dev_stage <- factor(df$Dev_stage, levels = unique(df$Dev_stage))
+  
+  ggplot(df, aes(y = Counts, x = Dev_stage)) +
+    geom_point(shape = 21, size = 2, colour = "black", fill = "royalblue") +
+    ggtitle(x) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank())
+})
+
+plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)

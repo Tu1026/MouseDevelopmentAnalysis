@@ -230,3 +230,20 @@ get_genes_with_symbols <- function(merged_table) {
 }
 
 
+rowSD <- function(matrix) {
+  #
+  # For a matrix, return the st_dev of each row
+  #
+  sd_matrix <- matrix(0,
+                      nrow = nrow(matrix),
+                      ncol = 1)
+  rownames(sd_matrix) <- rownames(matrix)
+  
+  for (row_num in 1:nrow(matrix)) {
+    row <- matrix[row_num,]
+    st_dev <- sd(row)
+    sd_matrix[row_num,] <- st_dev
+  }
+  return(sd_matrix[,1])
+}
+

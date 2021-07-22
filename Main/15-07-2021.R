@@ -1,6 +1,7 @@
 library(tidyverse)
 library(preprocessCore)
 library(cowplot)
+install.packages("preprocessCore")
 
 meta <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
 count_mat <- readRDS(file = "Data/pc_count_matrix.rds")
@@ -12,7 +13,7 @@ diff_count_mat <- readRDS(file = "Data/diff_pc_count_matrix.rds")
 
 count_mat <- log10(count_mat+1)
 proc_mat <- normalize.quantiles(count_mat)
-
+normalize.quantiles()
 
 # look at the distribution of gene counts before and after norm
 # data is already very tight - quantile norm has minimal effect
@@ -26,6 +27,7 @@ for (i in 2:ncol(count_mat)) {  # rest of the samples
 for (i in 1:ncol(proc_mat)) {  # then all of the normalized samples
   lines(density(proc_mat[, i]), col = "red")
 }
+
 
 # Sum of counts across samples - use to look for no/low expressed
 gene_counts <- rowSums(count_mat)
