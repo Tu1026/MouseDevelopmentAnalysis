@@ -118,7 +118,7 @@ replicate_df <- data.frame(Replicate_1 = Replicate_1,
 
 replicate_scatterplot <- ggplot(replicate_df)+ 
   geom_point(mapping = aes(x = Replicate_1, y = Replicate_2))+
-  labs( title = "Pair-wise counts of two replicate samples")
+  labs( title = "Pair-wise counts of two replicate samples") 
 
 replicate_scatterplot
 
@@ -265,6 +265,7 @@ for (i in 1:ncol(count_matrix)) {  # rest of the samples
 #---------------------------------------------------------------------------
 
 summary <- summary(count_matrix[,])
+summary
 
 row_sum <- rowSums(count_matrix)
 summary(row_sum)
@@ -275,6 +276,7 @@ summary(row_mean)
 row_stdev <- rowSD(count_matrix)
 
 row_rel_sd <- row_stdev/row_mean
+row_rel_sd
 
 summary_matrix <- matrix(c(row_sum, row_mean, row_stdev, row_rel_sd),
                          nrow = length(row_sum),
@@ -286,7 +288,7 @@ colnames(summary_matrix) <-  c("row_sum",
 rownames(summary_matrix) <-  names(row_sum)
 
 #---------------------------------------------------------------------------
-# mean variance plot for al lgenes
+# mean variance plot for genes
 #---------------------------------------------------------------------------
 
 plot(row_mean, row_stdev)
@@ -317,51 +319,181 @@ row_stdev["Clec2g"]/row_mean["Clec2g"]
 
 # If a gene's row summary is equal to 0, then we are saying 
 # that it was never expressed
+summary_matrix
+
+never_expressed_genes <- summary_matrix[row_sum == 0,]
+message(paste(nrow(never_expressed_genes), "genes were never expressed"))
+
+#Investingating genes that were never expressed
+count_matrix["Pbsn",]
+
+plot(count_matrix["Pbsn",])
 
 
-never_expressed_genes <- row_sum [row_sum == 0]
+#---------------------------------------------------------------------------
+# Genes that are expressed
+#---------------------------------------------------------------------------
 
-expressed_genes <- row_sum[row_sum != 0]
+expressed_genes <- summary_matrix [row_sum != 0,]
 expressed_genes
 
-expressed_row_mean <- row_mean [ row_sum !=0 ]
-expressed_row_sd <- row_stdev [ row_sum !=0 ]
-expressed_row_rel_sd <- row_rel_sd [ row_sum !=0]
+stopifnot(nrow(never_expressed_genes) + nrow(expressed_genes) == nrow(summary_matrix))
+
+# Genes that are ordered by row_sum
+expressed_genes[order(expressed_genes[,"row_sum"]), ]
+
+# Proof that it works. Values are the same
+expressed_genes["Dppa2",]
+
+summary(expressed_genes[,"row_sum"])
+
+nrow(expressed_genes)
+
+
+df_expressed_genes <- data.frame("Sum_Expression" = expressed_genes[,"row_sum"],
+                                 "Genes" = rownames(expressed_genes),
+                                 "RSD_Expression" = expressed_genes[,"row_rel_sd"],
+                                 "SD_Expression" = expressed_genes[, "row_stdev"])
+ggplot(df_expressed_genes) + 
+  geom_histogram(mapping = aes(Sum_Expression), fill = "red") +
+  geom_vline(xintercept = c(summary(expressed_genes[,"row_sum"]))) +
+  geom_text(aes(x=summary(expressed_genes[,"row_sum"])[3],
+                label="Median",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
+  geom_text(aes(x=summary(expressed_genes[,"row_sum"])[4],
+              label="Mean",
+              y=20),
+          colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+  labs(title = "Distribution of row_sum for expressed genes")
+
+ggplot(df_expressed_genes) + 
+  geom_histogram(mapping = aes(RSD_Expression), fill = "red", color = "black") +
+  geom_vline(xintercept = c(summary(expressed_genes[,"row_rel_sd"]))) +
+  geom_text(aes(x=summary(expressed_genes[,"row_rel_sd"])[3],
+                label="Median",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
+  geom_text(aes(x=summary(expressed_genes[,"row_rel_sd"])[4],
+                label="Mean",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+  labs(title = "Distribution of row_rel_sd for expressed genes")
+
+#---------------------------------------------------------------------------
+# Why values stack up at 4 for relative standard deviation
+#---------------------------------------------------------------------------
+
+# Case example is "Cpn2" or "Cdcp3"
+
+count_matrix["Cdcp3",]
+count_matrix["Cpn2",]
+
+origonal_count <- (10 ** count_matrix["Cdcp3",]["ENCFF918QNL"]) - 1
+
+# I'm presuming that 0.01 was the lowest possible value for their TPM
+
+# so the values of 4 are when one instance of the loest possible epxression happens
+
+
+count_matrix["Pigr",]
+
+# We can see that rel st values of 2.73 correspond to when there are 2 instances 
+# of the loest possible expression
+
 
 #---------------------------------------------------------------------------
 # mean variance plot for expressed genes
 #---------------------------------------------------------------------------
 
-plot(expressed_row_mean, expressed_row_sd)
-#It actually doesn't change because I imagine the 0s are already taken out for
-# previous mean variance plot anyways
-
-df_rel_sd <- data.frame(expressed_row_rel_sd)
-ggplot(df_rel_sd) + 
-  geom_histogram(mapping = aes(expressed_row_rel_sd))
+plot(expressed_genes[,"row_mean"], expressed_genes[,"row_stdev"])
 
 
-head(sort(expressed_row_rel_sd, decreasing = TRUE), n = 1000)
+#---------------------------------------------------------------------------
+# Removing lowly expressed Genes with high variance
+#---------------------------------------------------------------------------
 
-summary_matrix [names(sort(summary_matrix[,4], decreasing = TRUE)), ]
+# I'm going to say that in order to be expressed, the row_sum of a gene must be
+# greater than 1.000. Using the log transformed values this is around 0.30103
+expressed_genes[ order (expressed_genes[,"row_sum"]) , ]
+
+high_expressed_genes <- expressed_genes[ expressed_genes[ ,"row_sum"] > log10(2), ]
+high_expressed_genes[ order (high_expressed_genes[,"row_sum"]) , ]
+
+df_high_expressed_genes <- data.frame(
+  "Sum_Expression" = high_expressed_genes[,"row_sum"],
+  "RSD_Expression" = high_expressed_genes[,"row_rel_sd"])
+
+
+ggplot(df_high_expressed_genes) + 
+  geom_histogram(mapping = aes(Sum_Expression), fill = "red") +
+  geom_vline(xintercept = c(summary(high_expressed_genes[,"row_sum"]))) +
+  geom_text(aes(x=summary(high_expressed_genes[,"row_sum"])[3],
+                label="Median",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
+  geom_text(aes(x=summary(high_expressed_genes[,"row_sum"])[4],
+                label="Mean",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+  labs(title = "Distribution of row_sum for highly_ expressed genes")
+
+ggplot(df_high_expressed_genes) + 
+  geom_histogram(mapping = aes(RSD_Expression), fill = "red") +
+  geom_vline(xintercept = c(summary(high_expressed_genes[,"row_rel_sd"]))) +
+  geom_text(aes(x=summary(high_expressed_genes[,"row_rel_sd"])[3],
+                label="Median",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
+  geom_text(aes(x=summary(high_expressed_genes[,"row_rel_sd"])[4],
+                label="Mean",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+  labs(title = "Distribution of row_rel_sd for highly_expressed genes")
+
+
+# Its important to note that the distribution for the highly expressed genes
+# doesn't have that stack up at 4 For RSD. 
 
 # Notably, all of the higehst mean variance genes have really low expression
 
 
 #---------------------------------------------------------------------------
-# Investigatging Clec2g
+# Investigatging Some random genes
 #---------------------------------------------------------------------------
 # I've chosen this gene artibrarily. Just to see what it looks like over time
 
-count_matrix["Clec2g",]
+# Some lowly expressed genes
 
-# as expected, there is very little expression over time. It does change
-# but its hard to make any actual assumptions here. 
-# Supposedly it Inhibits osteoclast formation.
+expressed_genes[ order (expressed_genes[,"row_sum"])  , ]
 
-# Because all of the top mean variance have very small expressions. I'm 
-# going to only look at mean variances where the expressions are above the 
-# 25th percentile of avg expression
+plot(count_matrix["Olfr183",])
+plot(count_matrix["Serpinb3b",])
+
+# Some lowly expressed Genes from the bottom of the high_expressed_genes
+high_expressed_genes[ order (high_expressed_genes[,"row_sum"]) , ]
+summary(high_expressed_genes)
+
+plot(count_matrix["Trim43a",])
+plot(count_matrix["Btla",])
+
+# Some highly expressed Genes from between 1rst and 2nd percentile
+high_expressed_genes[ high_expressed_genes[,"row_sum"] > 5.27, ]
+plot(count_matrix["Itga3",])
+
+# Some highly expressed Genes from between 2nd and 3rd percentile
+plot(count_matrix["Kdelr1",])
+
+# Some highly expressed Genes from between 3rd and 4th percentile
+high_expressed_genes[ high_expressed_genes[,"row_sum"] > 6.67, ]
+plot(count_matrix["Ap1s1",])
+
+# Most Highly Expressed Genes
+high_expressed_genes[ order (high_expressed_genes[,"row_sum"], decreasing = TRUE ) , ]
+
+plot(count_matrix["Tuba1a",])
+plot(count_matrix["Stmn1",])
+plot(count_matrix["Ptges3",])
 
 
 #---------------------------------------------------------------------------
@@ -369,6 +501,8 @@ count_matrix["Clec2g",]
 #---------------------------------------------------------------------------
 first_quartile <- summary(row_mean)[2]
 
+# Double check all of the first quartile's and see if any are small expression to high expression
+# Plot the before
 
 summary_matrix_high <- summary_matrix[row_mean >=  first_quartile,]
 summary_matrix_high
@@ -614,3 +748,126 @@ plot_list <- lapply(tfs, function(x) {
 })
 
 plot_grid(plotlist = plot_list, nrow = 2, ncol = 4)
+
+# TODO Make slide about how yea these are increasing and thats indicative of growth/increasing abundance of cell that expresses
+# TODO Be able to talk about the reliability of this data
+
+
+#---------------------------------------------------------------------------
+# Exploring Tf factors
+#---------------------------------------------------------------------------
+
+# explore their expression changes
+
+tfs <- read.delim(file = "mouse_tfs.tsv", 
+                  sep = "\t")
+
+tf_count_matrix <- count_matrix[tfs$Symbol,]
+
+tf_summary_matrix <- summary_matrix[tfs$Symbol,]
+
+stopifnot(nrow(tfs) == nrow(tf_count_matrix))
+stopifnot(nrow(tfs) ==  nrow(tf_summary_matrix))
+
+# --- Exploring expression change
+
+df_tf_count <- data.frame("TF_Sum" = tf_summary_matrix[,"row_sum"])
+
+ggplot(df_tf_count) + 
+  geom_histogram(mapping = aes(TF_Sum), fill = "red") +
+  geom_vline(xintercept = c(summary(tf_summary_matrix[,"row_sum"]))) +
+  geom_text(aes(x=summary(tf_summary_matrix[,"row_sum"])[3],
+                label="Median",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
+  geom_text(aes(x=summary(tf_summary_matrix[,"row_sum"])[4],
+                label="Mean",
+                y=20),
+            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+  labs(title = "Distribution of row_sum for tfs expressed genes")
+
+# Its a very similar expression pattern to the overall genes. Not surprisingly.
+
+
+# --- Correlating TF factors to eachother
+
+# Generate a corr matrix for each TF across the time samples
+
+rot_count_matrix <- t(count_matrix)
+
+# TODO FORALEX: Is this what you want? It takes a long time. How do I pick the strongest correlations?
+
+rot_pear_rcorr_object <- rcorr(rot_count_matrix[,1:100], type = "pearson")
+rot_pear_matrix <- rot_pear_rcorr_object$r
+rot_pear_matrix_pvalues <- rot_pear_rcorr_object$P
+
+rot_spear_heatmap <- heatmap(x = rot_pear_matrix,
+                         sym = TRUE,
+                         Rowv = NA,
+                         Colv = NA, 
+                         revC= TRUE)
+
+###HELP###
+for (colname in colnames(rot_pear_matrix)) {
+  browser()
+  
+  bool <- rot_pear_matrix[,colname] > 0.9 & rot_pear_matrix[,colname] != 1.00
+  
+  rot_pear_matrix[,bool]
+}
+view(rot_pear_matrix)
+
+# ------ Correlate TF factors to other strongly positive correlated genes
+
+# Lets look at Gnai3 and Cdc45 because they are supposed to have 0.9 correlation
+
+plot(count_matrix["Gnai3", ])
+plot(count_matrix["Cdc45", ])
+
+#You can see that they are very closely positive correlated
+
+plot(count_matrix["Gnai3", ],
+     count_matrix["Cdc45", ])
+
+# Pretty correlated
+
+
+# ------ Correlate TF factors to other strongly negative correlated genes
+
+# Lets look at Gnai3 and Clec10a because they are supposed to have -0.9 correlation
+
+plot(count_matrix["Gnai3", ])
+plot(count_matrix["Clec10a", ])
+
+#You can see that they are very strongly negatively correlated
+
+plot(count_matrix["Gnai3", ],
+     count_matrix["Clec10a", ])
+
+# Pretty correlated
+
+
+# ------ Correlate TF factors to non-correlated genes
+
+# Lets look at Gnai3 and Gpa33 because they are supposed to have ~0 correlation
+# We are asuming GPa33 is normally distributed, which it prob isnt because its variation is so low
+
+plot(count_matrix["Gnai3", ])
+plot(count_matrix["Gpa33", ])
+
+#You can see that they are very weakly correlated
+
+plot(count_matrix["Gnai3", ],
+     count_matrix["Gpa33", ])
+
+# Pretty non- correlated
+
+
+# TODO
+# Generate matrices forother parts
+
+#TODO design matrix
+
+# TODO DEA
+
+# TODO make plots nier and begin making good slides
