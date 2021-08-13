@@ -26,8 +26,6 @@ meta_data <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE,
 # Log 10+1 normalizing 
 #---------------------------------------------------------------------------
 count_matrix <- log10(count_matrix+1)
-avg_count_matrix <- log10(avg_count_matrix+1)
-
 
 #---------------------------------------------------------------------------
 # Create place for new matrix exploration graphs 
@@ -38,36 +36,65 @@ dir.create(path = "Data/Matrix_Exploration/General_Graphs")
 #---------------------------------------------------------------------------
 # Identifying differentially expressed genes between replicates
 #---------------------------------------------------------------------------
-#Pass
+
+# Ideally, replicates should have similar counts for all genes. 
+# Here we will explore the genes that dont and add them to alist
+
+# --- Looking at E105 first
+E105 <- diff_count_matrix[, colnames(diff_count_matrix)[1]]
+
+E105_df <- data.frame("E105" = E105)
+E105_df <- arrange(E105_df, desc(E105_df$E105))
+
+summary(E105_df)
+summary(log10(E105_df+1))
+E105_hist <- ggplot(log10(E105_df+1), aes(x = E105)) + 
+  geom_histogram(bins=100) +
+  labs( title = "E105 most differentially expresed genes")
+E105_hist
+
+l_most_diff_genes <- list("E105" = head(E105_df, n = 10))
+
+# --- Doing the same for all dev stages
+l_most_diff_genes <- list()
+
+
+get_most_diff <- function(column) {
+  my_df <- data.frame("Diff_count" = column)
+  arranged_df <- arrange(my_df, desc(my_df))
+  return(top_n(arranged_df, n = 10))
+}
+
+most_diff_genes <- apply(diff_count_matrix, MARGIN = 2, FUN = get_most_diff)
+most_diff_genes
+
 #---------------------------------------------------------------------------
 # Identifying most expressed genes
 #---------------------------------------------------------------------------
 
 # Here we will identify the genes that are most expressed in each sample
 
-# --- Looking at a single sample first. Lets look at E14.5-2
+# --- Looking at E16.5-2 first
+E16.52 <- count_matrix[,16]
 
-# Graph histogram For E14.5-2
+# Graph histogram
 
-E14 <- as.data.frame(count_matrix[,14])
-
-general_hist <- ggplot(data = E14) +
-  geom_histogram(mapping = aes(count_matrix[,14]), fill = "steelblue")+
+general_hist <- ggplot(data = as.data.frame(count_matrix[,16])) +
+  geom_histogram(mapping = aes(count_matrix[,16]), fill = "steelblue")+
   xlab("Expression (log10+1 normalized)") + 
   ylab("Count") + 
-  ggtitle("Expression Histogram of E14.5-2")
+  ggtitle("Expression Histogram of E16.5-2")
 
-ggsave(filename = "Data/Matrix_Exploration/General_Graphs/histogram.png",
-       general_hist)
+ggsave(filename = "Data/Matrix_Exploration/General_Graphs/histogram.png", general_hist)
 
+E105_df <- data.frame("E105" = E105)
+E105_df <- arrange(E105_df, desc(E105_df$E105))
 
-E14_most_expr <- arrange(E14, desc(E14))
-colnames(E14_most_expr) <- c("Log10+1 Expression")
-
-head(E14_most_expr,5)
+l_most_expr_genes <- list("E105" = head(E105_df, n = 10))
 
 # --- Doing the same for all dev stages
 l_most_expr_genes <- list()
+
 
 get_most_expr<- function(column) {
   my_df <- data.frame("count" = column)
@@ -76,7 +103,7 @@ get_most_expr<- function(column) {
 }
 
 most_expr_genes <- apply(count_matrix, MARGIN = 2, FUN = get_most_expr)
-head(most_expr_genes, 5)
+most_expr_genes
 
 #---------------------------------------------------------------------------
 # Comments on most expr and most diff genes
@@ -97,103 +124,35 @@ head(most_expr_genes, 5)
 
 
 never_expressed_genes <- avg_count_matrix[  avg_count_matrix[ , 1] <= 1 &
-                                              avg_count_matrix[ , 2] <= 1 & 
-                                              avg_count_matrix[ , 3] <= 1 &
-                                              avg_count_matrix[ , 4] <= 1 &
-                                              avg_count_matrix[ , 5] <= 1 &
-                                              avg_count_matrix[ , 6] <= 1 &
-                                              avg_count_matrix[ , 7] <= 1 &
-                                              avg_count_matrix[ , 8] <= 1 , ]
-head(never_expressed_genes, 5) 
+                        avg_count_matrix[ , 2] <= 1 & 
+                        avg_count_matrix[ , 3] <= 1 &
+                        avg_count_matrix[ , 4] <= 1 &
+                        avg_count_matrix[ , 5] <= 1 &
+                        avg_count_matrix[ , 6] <= 1 &
+                        avg_count_matrix[ , 7] <= 1 &
+                        avg_count_matrix[ , 8] <= 1 , ]
+never_expressed_genes
 
-#---------------------------------------------------------------------------
-# Summarizing the count_matrix
-#---------------------------------------------------------------------------
-#Get summary stats for the count_matrix and make a boxplot
-
-summary <- summary(count_matrix[,])
-
-count_boxplot <- ggplot(stack(as.data.frame(count_matrix)))+
-  geom_boxplot(mapping = aes(x = ind, y = values))+
-  xlab("Sample") + 
-  ylab("Expression (log10+1 normalized)") + 
-  ggtitle("Boxplot of Samples") +
-  scale_x_discrete(labels = c("E10.5-1",
-                              "E10.5-2",
-                              "E11.5-1",
-                              "E11.5-2",
-                              "E12.5-1",
-                              "E12.5-2",
-                              "E13.5-1",
-                              "E13.5-2",
-                              "E14.5-1",
-                              "E14.5-2",
-                              "E15.5-1",
-                              "E15.5-2",
-                              "E16.5-1",
-                              "E16.5-2",
-                              "P0-1",
-                              "P0-2")
-                   )
-  
-count_boxplot
-
-ggsave(filename = "Data/Matrix_Exploration/General_Graphs/count_boxplot.png",
-       count_boxplot)
-
-#---------------------------------------------------------------------------
-# Genes only expressed at P0
-#---------------------------------------------------------------------------
-#pull an example just because
-
-never_expr_p0 <- count_matrix[  count_matrix[ , 1] <= log10(1) &
-                           count_matrix[ , 2] <= log10(1) & 
-                           count_matrix[ , 3] <= log10(1) &
-                           count_matrix[ , 4] <= log10(1) &
-                           count_matrix[ , 5] <= log10(1) &
-                           count_matrix[ , 6] <= log10(1) &
-                           count_matrix[ , 7] <= log10(1) &
-                           count_matrix[ , 8] <= log10(1) &
-                          count_matrix[ , 9] <= log10(1) & 
-                          count_matrix[ , 10] <= log10(1) &
-                          count_matrix[ , 11] <= log10(1) &
-                          count_matrix[ , 12] <= log10(1) &
-                          count_matrix[ , 13] <= log10(1) &
-                          count_matrix[ , 14] <= log10(1) , ]
-
-#Retnla is the best case
-
-count_matrix["Retnla",] # it is clearly only expressed in P0
-
-retnla<- ggplot(as.data.frame(avg_count_matrix["Retnla",])) +
-  geom_point(mapping= aes(x = colnames(avg_count_matrix),
-                          y = avg_count_matrix["Retnla",]),
-             fill = "steelblue")+
-  xlab("Developmental Stage") +
-  ylab ("Expression (log10+1 normalized)") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
-  ggtitle("Expression of Retn1a")
-
-
-retnla
-ggsave(filename = "Data/Matrix_Exploration/General_Graphs/Retnla.png")
 
 #---------------------------------------------------------------------------
 # Summarizing Gene Expression across rows and constructing matrix
 #---------------------------------------------------------------------------
 
-# For convenience, I'm going to make a little matrix that has all of the row summary
-# information in it .
+summary <- summary(count_matrix[,])
+summary
 
 row_sum <- rowSums(count_matrix)
-row_mean <- rowMeans(count_matrix)
-row_stdev <- rowSD(count_matrix)
-row_rel_sd <- row_stdev/row_mean
+summary(row_sum)
 
-summary_matrix <- matrix(c(row_sum,
-                           row_mean,
-                           row_stdev,
-                           row_rel_sd),
+row_mean <- rowMeans(count_matrix)
+summary(row_mean)
+
+row_stdev <- rowSD(count_matrix)
+
+row_rel_sd <- row_stdev/row_mean
+row_rel_sd
+
+summary_matrix <- matrix(c(row_sum, row_mean, row_stdev, row_rel_sd),
                          nrow = length(row_sum),
                          ncol = 4)
 colnames(summary_matrix) <-  c("row_sum",
@@ -202,11 +161,15 @@ colnames(summary_matrix) <-  c("row_sum",
                                "row_rel_sd")
 rownames(summary_matrix) <-  names(row_sum)
 
-summary_matrix
+#---------------------------------------------------------------------------
+# mean variance plot for genes
+#---------------------------------------------------------------------------
 
-#---------------------------------------------------------------------------
-# sTdev convering at 4
-#---------------------------------------------------------------------------
+plot(row_mean, row_stdev)
+
+head(sort(row_rel_sd, decreasing = TRUE), n = 1000)
+head(sort(row_mean, decreasing = TRUE), n = 100)
+
 
 row_rel_sd
 head(row_rel_sd)
@@ -218,7 +181,6 @@ row_rel_sd["Clec2g"]
 row_stdev["Clec2g"]/row_mean["Clec2g"]
 
 
-
 # The genes with the highest relative standard deviation might be of the greatest
 # interest as they might vary significantly. Indicating that they 
 # change throughout development, which suggests that they are tightly regulated
@@ -226,6 +188,22 @@ row_stdev["Clec2g"]/row_mean["Clec2g"]
 
 # Question: Why are they all converging at 4? ?????
 
+
+#---------------------------------------------------------------------------
+# Genes that are never expressed
+#---------------------------------------------------------------------------
+
+# If a gene's row summary is equal to 0, then we are saying 
+# that it was never expressed
+summary_matrix
+
+never_expressed_genes <- summary_matrix[row_sum == 0,]
+message(paste(nrow(never_expressed_genes), "genes were never expressed"))
+
+#Investingating genes that were never expressed
+count_matrix["Pbsn",]
+
+plot(count_matrix["Pbsn",])
 
 
 #---------------------------------------------------------------------------
@@ -260,9 +238,9 @@ ggplot(df_expressed_genes) +
                 y=20),
             colour="blue", angle=90, vjust = 1.2, text=element_text(size=11)) +
   geom_text(aes(x=summary(expressed_genes[,"row_sum"])[4],
-                label="Mean",
-                y=20),
-            colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
+              label="Mean",
+              y=20),
+          colour="blue", angle=90, vjust = 1.2, text=element_text(size=11))+
   labs(title = "Distribution of row_sum for expressed genes")
 
 ggplot(df_expressed_genes) + 
@@ -475,7 +453,7 @@ names(plot_list) <- tfs
 # }
 # I'm not sure why the plots arn't showing up in this while loop
 
-#It seems like most of these just have high variances because they have outliers
+ #It seems like most of these just have high variances because they have outliers
 # Likely need to find a way to filter out genes that don't have outliers. But 
 # you can't really determine which are outliers because there's only n=2 for each 
 # dev stage. 
@@ -700,10 +678,10 @@ rot_pear_matrix <- rot_pear_rcorr_object$r
 rot_pear_matrix_pvalues <- rot_pear_rcorr_object$P
 
 rot_spear_heatmap <- heatmap(x = rot_pear_matrix,
-                             sym = TRUE,
-                             Rowv = NA,
-                             Colv = NA, 
-                             revC= TRUE)
+                         sym = TRUE,
+                         Rowv = NA,
+                         Colv = NA, 
+                         revC= TRUE)
 
 # ###HELP###
 # for (colname in colnames(rot_pear_matrix)) {

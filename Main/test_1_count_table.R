@@ -28,7 +28,7 @@ library(skimr)
 #---Choose which count table to process
 # index is the frame that you are selecting from l_expr_tables
 count_tables_names <- list.files("Data/Count_tables")
-index <- 3
+index <- 1
 test_table <- open_expr_table(target_directory = "Data/Count_tables",
                               expression_table.tsv = count_tables_names[index])
 
@@ -158,35 +158,35 @@ n_not_matched_pc_table <- nrow(pc_sub) - sum(pc_sub$Gene_ID %in% test_merged$Gen
 #---------------------------------------------------------------------------
 # This part of the script is for plotting
 #---------------------------------------------------------------------------
-names <- factor(x = c("Size of PC Table", 
-                      "Num Gene Id's that didn't match", 
-                      "Num Gene Id's that matched", 
-                      "Size of Merged Count Table", 
-                      "Num of Measured Proteins with Symbols", 
-                      "Num of Measured Proteins without Symbols"),
-                levels = c("Size of PC Table", 
-                           "Num Gene Id's that didn't match", 
-                           "Num Gene Id's that matched", 
-                           "Size of Merged Count Table", 
-                           "Num of Measured Proteins with Symbols", 
-                           "Num of Measured Proteins without Symbols"))
+names <- factor(x = c("ENCODE PC Genes", 
+                      "Measured Genes", 
+                      "Measured PC Genes"),
 
+                levels = c("ENCODE PC Genes", 
+                           "Measured Genes", 
+                           "Measured PC Genes")
+                )
 lengths <- c(nrow(pc_sub), 
-             n_not_matched_pc_table, 
-             sum(pc_sub$Gene_ID %in% test_merged$Gene_ID),
-             nrow(test_merged), 
-             n_matched_to_symbol, 
-             n_not_matched_to_symbol)
+             nrow(test_table),
+             nrow(with_symbols))
 
 df_summary_stats <- data.frame(x = names, y = lengths)
 
+### Open meta_data for the naminf of this plot
+fb_meta <- read.delim(file = "Data/complete_meta_data.tsv",
+           sep = "\t",
+           stringsAsFactors = FALSE)
+test_table_stage <- fb_meta %>%
+  filter(id == test_table_ID) %>%
+  select(dev_stage)
 
 pl_summary_stats <- ggplot(df_summary_stats) +
-  geom_col(mapping = aes(x = names, y = lengths))+
-  labs(title = test_table_ID)+
+  geom_col(mapping = aes(x = names, y = lengths), fill = "steelblue")+
+  labs(title = paste0(test_table_ID, " (",test_table_stage$dev_stage, ") "))+
   xlab("Summary Stats")+
   ylab("Counts of Gene Id\'s")+
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  theme(axis.text.x = element_text(angle = 0))+
+  theme_classic()
 pl_summary_stats
 
 write_delim(df_summary_stats,
@@ -194,5 +194,8 @@ write_delim(df_summary_stats,
             delim = "\t" )
 ggsave(file = paste0("Data/test_table_analysis/"
                      ,test_table_ID,"_plot.png"),
-       plot = pl_summary_stats)
+       plot = pl_summary_stats,
+       dpi = 1000,
+       width = 5.5, 
+       height = 4.5)
 

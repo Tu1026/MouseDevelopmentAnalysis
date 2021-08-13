@@ -77,6 +77,17 @@ meta_data <- read.delim("Data/complete_meta_data.tsv",
                         stringsAsFactors = FALSE,
                         sep = "\t")
 
+#---Open PC Table
+pc <- read.delim("Data/ensembl_mouse_protein_coding_104.tsv",
+                 stringsAsFactors = FALSE)
+
+#---Remove nondistinct Symbols and Gene_IDs from pc table
+# and select only gene id and symbol, the relevant columns.
+pc_sub <- pc %>% 
+  select(Gene_ID, Symbol)%>%
+  distinct(Gene_ID, .keep_all = TRUE) %>% 
+  distinct(Symbol, .keep_all = TRUE)
+
 #---------------------------------------------------------------------------
 # Prep PC and l_expr_tables for merging with each other, then merge
 #--------------------------------------------------------------------------

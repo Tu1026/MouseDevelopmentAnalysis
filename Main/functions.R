@@ -247,3 +247,20 @@ rowSD <- function(matrix) {
   return(sd_matrix[,1])
 }
 
+rowVar <- function(matrix) {
+  #
+  # For a matrix, return the variance of each row
+  #
+  var_matrix <- matrix(0,
+                      nrow = nrow(matrix),
+                      ncol = 1)
+  rownames(var_matrix) <- rownames(matrix)
+  
+  for (row_num in 1:nrow(matrix)) {
+    row <- matrix[row_num,]
+    row_var<- var(row)
+    var_matrix[row_num,] <- row_var
+  }
+  return(var_matrix[,1])
+}
+

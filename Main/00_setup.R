@@ -6,7 +6,8 @@
 # Package installation
 # -----------------------------------------------------------------------------
 
-packages <- c("tidyverse", "assertthat","googlesheets4", "skimr", "Hmisc", "corrplot")
+packages <- c("tidyverse", "assertthat","googlesheets4", "skimr", "Hmisc", "corrplot", "pheatmap",
+              "reshape2")
 install.packages(setdiff(packages, rownames(installed.packages())))
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
