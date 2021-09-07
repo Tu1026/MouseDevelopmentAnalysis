@@ -158,17 +158,17 @@ n_not_matched_pc_table <- nrow(pc_sub) - sum(pc_sub$Gene_ID %in% test_merged$Gen
 #---------------------------------------------------------------------------
 # This part of the script is for plotting
 #---------------------------------------------------------------------------
-names <- factor(x = c("ENCODE PC Genes", 
-                      "Measured Genes", 
+names <- factor(x = c(
+                      "Annotated Genes", 
                       "Measured PC Genes"),
 
-                levels = c("ENCODE PC Genes", 
-                           "Measured Genes", 
+                levels = c(
+                           "Annotated Genes", 
                            "Measured PC Genes")
                 )
-lengths <- c(nrow(pc_sub), 
+lengths <- c( 
              nrow(test_table),
-             nrow(with_symbols))
+             nrow(count_matrix))
 
 df_summary_stats <- data.frame(x = names, y = lengths)
 

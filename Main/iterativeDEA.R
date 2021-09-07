@@ -52,6 +52,9 @@ groups <- factor(meta$dev_stage)
 keep <- filterByExpr(dge, groups)
 dge <- dge[keep, keep.lib.sizes = FALSE]
 
+# dge[dge$counts[,1] <=0.365,]
+
+
 
 # -- ADD filtered data to plot
 # legend("topright", samplenames, text.col=col, bty="n")
@@ -181,7 +184,7 @@ vfit <- lmFit(v, design)
 
 #Use ebays moderated variance.
 # efit <- eBayes(vfit)
-
+# 
 # plotSA(efit, main = "Final model: Mean-variance trend")
 
 
@@ -203,3 +206,5 @@ examine_contrast <- function(contrast, vfit) {
           file = paste0("Data/DEAs/",colnames(contrast),".rds"))
 }
 lapply(allcontrasts, examine_contrast, vfit)
+
+allE10 <- readRDS(file = "Data/DEAs/allE10.rds")

@@ -35,13 +35,15 @@ if (! "gene2GO" %in% ls()) {
 #   }
 # }
 
-desired_DEAs <- c("Data/DEAs/E11E10.rds",
-                  "Data/DEAs/E12E11.rds",
-                  "Data/DEAs/E13E12.rds",
-                  "Data/DEAs/E14E13.rds",
-                  "Data/DEAs/E15E14.rds",
-                  "Data/DEAs/E16E15.rds",
-                  "Data/DEAs/P0E16.rds")
+desired_DEAs <- c("Data/DEAs/allE10.rds",
+                  "Data/DEAs/allE11.rds",
+                  "Data/DEAs/allE12.rds",
+                  "Data/DEAs/allE13.rds",
+                  "Data/DEAs/allE14.rds",
+                  "Data/DEAs/allE15.rds",
+                  "Data/DEAs/allE16.rds",
+                  "Data/DEAs/allP0.rds")
+          
 
 # Create selection criteria for logFC GO enrichment analysis
 logFC_upregulate <- function(allScore){
@@ -51,6 +53,9 @@ logFC_upregulate <- function(allScore){
 logFC_downregulate <- function(allScore){
   #select ALL genes. This assumes you've pre-selected your genes of interest
   return (allScore <= -1)
+}
+low_p <- function(allScore) {
+  return( allScore < 0.01 )
 }
 
 
@@ -72,22 +77,27 @@ do_enrichment <- function(DEA.rds, my_gene2GO, ontology_type, node_size, selecti
   DEA_name <- str_replace(string = str_split(string = DEA.rds, pattern = "/")[[1]][3], pattern = ".rds", replacement = "")
   message(DEA_name)
 
-  # Only get differentially exprepressed genes with alpha 0.01
-  sig <-  DEA %>%
-    filter(adj.P.Val <= 0.05)
-  if (is.null(sig)) {
-    warning(paste(DEA_name, "did not have any DEA"))
-    return(NA)
-  }
+  ####- The commented out section was used when doing logFC
+  # # Only get differentially exprepressed genes with alpha 0.01
+  # sig <-  DEA %>%
+  #   filter(adj.P.Val <= 0.05)
+  # if (is.null(sig)) {
+  #   warning(paste(DEA_name, "did not have any DEA"))
+  #   return(NA)
+  # }
+  # 
+  # # Coerce all diff expressed genes into vector of gene_name:logFC
+  # my_allGenes <- as.vector(sig$logFC)
+  # names(my_allGenes) <- rownames(sig)
+
+  my_allGenes <- as.vector(DEA$adj.P.Val)
+  names(my_allGenes) <- rownames(DEA)
   
-  # Coerce all diff expressed genes into vector of gene_name:logFC
-  my_allGenes <- as.vector(sig$logFC)
-  names(my_allGenes) <- rownames(sig)
   
   
   # Create GOdata object
   GOdata <- new("topGOdata",
-                description = paste0(DEA_name,"_logFC"),
+                description = paste0(DEA_name,"_p"),
                 ontology = ontology_type,
                 allGenes = my_allGenes,
                 geneSelectionFun = selection_method,
@@ -112,24 +122,28 @@ do_enrichment <- function(DEA.rds, my_gene2GO, ontology_type, node_size, selecti
                      classic = resultFis,
                      orderBy = classic,
                      topNodes = length(score(resultFis)))
-  
+
   return(allRes)
 }
 
 
 DEA_names <- lapply(desired_DEAs, function(x) str_replace(string = str_split(string = x, pattern = "/")[[1]][3], pattern = ".rds", replacement = ""))
 
-BPenrichments_upregulate <- lapply(desired_DEAs, do_enrichment,
+p_value_enr <- lapply(desired_DEAs, do_enrichment,
                my_gene2GO = gene2GO,
                ontology_type = "BP",
                node_size = 10,
-               selection_method =logFC_upregulate)
+               selection_method =low_p)
 
-names(BPenrichments_upregulate) <- DEA_names
+names(p_value_enr) <- DEA_names
+
+saveRDS(p_value_enr, file = "Data/enrichments/p_value.rds")
+
+stopifnot(FALSE)
 
 
 BPenrichments_downregulate <- lapply(desired_DEAs, do_enrichment,
-                                 my_gene2GO = my_gene2GO,
+                                 my_gene2GO = gene2GO,
                                  ontology_type = "BP",
                                  node_size = 10,
                                  selection_method =logFC_downregulate)

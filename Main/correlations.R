@@ -19,13 +19,7 @@ source('Main/functions.R')
 
 count_matrix <- readRDS(file = "Data/pc_count_matrix.rds")
 avg_count_matrix <- readRDS(file = "Data/avg_pc_count_matrix.rds")
-diff_count_matrix <- readRDS(file = "Data/diff_pc_count_matrix.rds")
 meta_data <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE, sep = "\t")
-
-
-
-
-
 
 #---------------------------------------------------------------------------
 # Generating Pearson Correlation Matrix

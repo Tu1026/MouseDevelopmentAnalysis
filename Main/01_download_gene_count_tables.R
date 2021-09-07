@@ -36,7 +36,9 @@ if (!(dir.exists(count_dir))) {
 }
 
 
-#Deciding if dnld_data needs to be executed, or if data has already been downloaded
+#Deciding if dnld_data needs to be executed, or if data has already been downloaded+
+
+browser()
 
 fb_gen_ex <- list.files(count_dir)
 

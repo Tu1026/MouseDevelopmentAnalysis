@@ -9,6 +9,8 @@ library(corrplot)
 library(cowplot)
 library(pheatmap)
 library(RColorBrewer)
+library(edgeR)
+
 
 source('Main/functions.R')
 
@@ -140,6 +142,10 @@ count_boxplot
 
 ggsave(filename = "Data/Matrix_Exploration/General_Graphs/count_boxplot.png",
        count_boxplot)
+
+
+
+
 
 #---------------------------------------------------------------------------
 # Genes only expressed at P0
@@ -769,3 +775,6 @@ plot(count_matrix["Gnai3", ],
 # TODO DEA
 
 # TODO make plots nier and begin making good slides
+
+#### 
+#Remove low counts and save that as count_matrix_pro
