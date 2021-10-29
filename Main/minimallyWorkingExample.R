@@ -227,6 +227,10 @@ pc_sub <- pc %>%
   distinct(Gene_ID, .keep_all = TRUE) %>% 
   distinct(Symbol, .keep_all = TRUE)
 
+write_tsv(x = pc_sub, file = "Data/pc_sub.tsv")
+
+
+
 file_names_in_order <- paste(meta_data$id, ".tsv",sep="")
 #---Read in all the count matrix
 all_count_matrix <- tximport(paste0(count_dir,"/",file_names_in_order), type = "rsem", txIdCol = "gene_id", txIn = FALSE,
@@ -254,6 +258,7 @@ rownames(all_count_matrix$abundance) <- new_row_names$Symbol
 
 
 saveRDS(object = all_count_matrix$abundance, file = "Data/pc_count_matrix.rds")
+write_tsv(x = data.frame(all_count_matrix$abundance), file = "Data/all_count_matrix.tsv")
 
 odd_names <- colnames(all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abundance),2)])
 even_names <- colnames(all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])
@@ -274,8 +279,11 @@ avg_count_matrix <- (all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abu
                        all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])/2;
 saveRDS(object = avg_count_matrix, file = "Data/avg_pc_count_matrix.rds")
 
+write_tsv(x = data.frame(avg_count_matrix), file = "Data/avg_count_matrix.tsv")
 
 diff_count_matrix <- abs(all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abundance),2)] - 
                            all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])
 saveRDS(object = diff_count_matrix, file = "Data/diff_pc_count_matrix.rds")
+write_tsv(x = data.frame(diff_count_matrix), file = "Data/diff_count_matrix.tsv")
+write_tsv(x = data.frame(rownames(diff_count_matrix)), "Data/rownames.tsv")
 
