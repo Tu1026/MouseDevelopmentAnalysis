@@ -10,7 +10,7 @@ library(cowplot)
 library(pheatmap)
 library(RColorBrewer)
 
-source('Main/functions.R')
+source('functions.R')
 
 
 #---------------------------------------------------------------------------
