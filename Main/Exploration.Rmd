@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
 output:
+  html_document:
+    df_print: paged
   pdf_document: default
   html_notebook: default
 ---
@@ -12,7 +14,21 @@ all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
 avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
 diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
 meta <- suppressMessages(readr::read_tsv("Data/complete_meta_data.tsv"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic facial prominence", "facial prominence"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 tissue_types <- unique(meta %>% pull(tissue_type))
+collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  tissue_subset_count <- all_counts[,tissue_subset_ids]
+  tissue_avg <- rowMeans(tissue_subset_count)
+  collapsed_dev_counts[,walker] <- tissue_avg
+  walker <- walker + 1
+}
+colnames(collapsed_dev_counts) <- tissue_types
+rownames(collapsed_dev_counts) <- rownames(all_counts)
 TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
 ```
 
@@ -195,24 +211,20 @@ all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissu
 ```
 expression distribution acrossed different tissues (box plot collapsed dev_stages)
 ```{r, fig.height=8, fig.width=16}
-all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
-all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
-  ggplot(data=all_counts_melted, aes(y=log2(count+1))) + geom_boxplot() +  facet_grid(. ~ tissue_type) + theme_cowplot(12) + theme(
+melted_collapsed_dev <- pivot_longer(data.frame(collapsed_dev_counts), cols=(everything()), names_to = "tissue_type", values_to = "count")
+ggplot(data=melted_collapsed_dev, aes(y=log2(count+1))) + geom_boxplot() +  facet_grid(. ~ tissue_type) + theme_cowplot(12) + theme(
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank()) + xlab("tissue_types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red")
 
 ```
 expression distribution acrossed different tissues (histogram collapsed by dev_stage)
 ```{r fig.height=8, fig.width=16, warning=FALSE}
-all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
-all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
-  suppressWarnings(ggplot(data=all_counts_melted, aes(x=log2(count+1), fill=tissue_type, y=..density..)) + geom_histogram(binwidth = 0.5) + theme_cowplot(12))  
+  suppressWarnings(ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), fill=tissue_type, y=..density..)) + geom_histogram(binwidth = 0.5) + theme_cowplot(12))  
 ```
 expression distribution acrossed different tissues (freq_plot collapsed by dev_stage)
 ```{r fig.height=8, fig.width=16, warning=FALSE}
-all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
-all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
-  ggplot(data=all_counts_melted, aes(x=log2(count+1), y=..density.., colour=tissue_type)) + geom_freqpoly(binwidth=0.5) + theme_cowplot(12) + scale_x_continuous(limits=c(0, 20))
+
+  ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), y=..density.., colour=tissue_type)) + geom_freqpoly(binwidth=0.5) + theme_cowplot(12) + scale_x_continuous(limits=c(0, 20))
 
 ```
 Mean-variance
@@ -283,24 +295,118 @@ ggplot(data=collapsed_matrices %>% filter(rowname %in% TFs), aes(x=log2(mean+1),
   geom_text_repel(data=collapsed_matrices %>% filter(rowname %in% TFs) %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue)) 
 
 ```
+Box plots for TFs across tissues
+```{r fig.height=8, fig.width=16}
+Tcf4Counts <- TFCounts %>% filter(rowname=="Tcf4")
+
+ggplot(data=TFCounts, aes(y=counts, x=tissue_type)) + geom_boxplot() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free") + geom_hline(yintercept=mean(TFCounts$counts), colour="red")
+```
+Tcf4 seems to be involved in neuronal differentiation so it makes sense for it to be highly expressed in the brains/neural tube but no so much in liver
+Some interesting observation, Mecp2 is basically not epxressed at all same as Runx1(except in thymus), and Tcf4 is one of the most active
+
+Expression across dev_stage and tissues
+```{r fig.height=8, fig.width=16}
+
+ggplot(data=TFCounts, aes(x=dev_stage, y=counts, colour=rowname)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type, scales = "free") + scale_colour_discrete(name = "Gene")
+```
+Expression across dev_stage and tissues (log transformed)
+```{r fig.height=8, fig.width=16}
+
+ggplot(data=TFCounts, aes(x=dev_stage, y=log2(counts+1), colour=rowname)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type) + scale_colour_discrete(name = "Gene")
+```
+histograms of expresssion distribution by tissues
+```{r fig.height=8, fig.width=16}
+
+ggplot(data=TFCounts, aes(x=log2(counts+1), fill=rowname)) + geom_histogram(bins=100) + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type, ncol=3,scales = "free") + scale_colour_discrete(name = "Gene")
+
+```
+cluster correlation heatmap
+```{r fig.height=8, fig.width=16}
+library(gplots)
+library(RColorBrewer)
+# Get some nicer colours
+mypalette <- brewer.pal(11, "RdYlBu")
+# http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta$tissue_type)/2)]
+# Plot the 
+avg_counts_tissue_name <- avg_counts
+colnames(avg_counts_tissue_name) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(avg_counts_tissue_name+1)[(order(apply(avg_counts,1,var), decreasing = TRUE))[1:50],], 
+          col=rev(morecols(50)),
+          trace="column", 
+          main="Top 50 most variable genes across samples",
+          ColSideColors=col.cell,
+          scale = "row")
+```
+
+cluster correlation heatmap (only TFs)
+```{r fig.height=8, fig.width=20}
+library(gplots)
+library(RColorBrewer)
+# Get some nicer colours
+mypalette <- brewer.pal(11, "RdYlBu")
+# http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta$tissue_type)/2)]
+# Plot the heatmap
+avg_counts_tissue_name <- avg_counts
+colnames(avg_counts_tissue_name) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(avg_counts_tissue_name+1)[TFs,], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="TF count heat map across tissues",
+          ColSideColors=col.cell,
+          scale="row")
+```
+Midbrain cluster correlation heatmap (only TFs)
+```{r fig.height=8, fig.width=20}
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta %>% filter(tissue_type=="midbrain") %>% pull(id)))]
+# Plot the heatmap
+midbrain_id <- meta %>% filter(tissue_type == "midbrain") %>% pull(id)
+midbrain_counts <- all_counts[,midbrain_id]
+colnames(midbrain_counts) <- sapply(colnames(midbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(midbrain_counts+1)[TFs,], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="TF count heat map across Midbrain",
+          ColSideColors=col.cell,
+          scale="row")
+```
+Hindbrain cluster correlation heatmap (only TFs)
+```{r fig.height=8, fig.width=20}
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta %>% filter(tissue_type=="hindbrain") %>% pull(id)))]
+# Plot the heatmap
+hindbrain_id <- meta %>% filter(tissue_type == "hindbrain") %>% pull(id)
+hindbrain_counts <- all_counts[,hindbrain_id]
+colnames(hindbrain_counts) <- sapply(colnames(hindbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(hindbrain_counts+1)[TFs,], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="TF count heat map across Hindbrain",
+          ColSideColors=col.cell,
+          scale="row")
+```
 
 
 
 
 
 
+Cluster by correlation
+PCA by cell type
+Check if using TPM
 
 
 
-
-
-
-
-
-
-
-look at 10 genese
-Completely different expression pattern in different tissues
 
 
 

@@ -233,8 +233,7 @@ write_tsv(x = pc_sub, file = "Main/Data/pc_sub.tsv")
 
 file_names_in_order <- paste(meta_data$id, ".tsv",sep="")
 #---Read in all the count matrix
-all_count_matrix <- tximport(paste0(count_dir,"/",file_names_in_order), type = "rsem", txIdCol = "gene_id", txIn = FALSE,
-                        countsCol = "TPM", importer = read_delim)
+all_count_matrix <- tximport(paste0(count_dir,"/",file_names_in_order), type = "rsem", txIn = FALSE)
 colnames(all_count_matrix$abundance) <- file_names_in_order
 #check the order of columns are correct
 for (file in file_names_in_order){
