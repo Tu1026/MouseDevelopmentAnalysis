@@ -5,6 +5,7 @@ output: html_notebook
 Setup
 ```{r}
 library(tidyverse)
+library(cowplot)
 all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
 avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
 diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
@@ -110,8 +111,75 @@ corrplot(pear_matrix, order = 'hclust', addrect = 8, method="shade", rect.col = 
 
 ```
 
+Prepare Limma (with individual comparison)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+# Demonstration of using limma to find differentially expressed genes
+
+library(limma)
+library(tidyverse)
+library(edgeR)
+library(tximport)
+
+# load data
+meta <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
+pc <- read.delim("Data/pc_sub.tsv", stringsAsFactors = FALSE)
+files <- paste0("Data/Count_tables/", meta$id, ".tsv")
+counts <- tximport(files, type = "rsem", txIn = FALSE)
+count_mat <- counts$counts
+
+# name matrix and only keep protein coding genes
+rownames(count_mat) <- str_replace(rownames(count_mat), "\\.[:digit:]*$", "")
+colnames(count_mat) <- meta$id
+count_mat <- count_mat[rownames(count_mat) %in% pc$Gene_ID, ]
+oldrownames <- data.frame(rownames(count_mat))
+rownames(count_mat) <- oldrownames %>% left_join(pc, by=c(colnames(oldrownames)[1] ="Gene_ID"))
+
+# order by tissue and dev stage
+meta <- meta %>% group_by(tissue_type) %>% arrange(dev_stage, .by_group = TRUE)
+count_mat <- count_mat[, meta$id]
+stopifnot(identical(colnames(count_mat), meta$id))
+
+# build design matrix
+design <- model.matrix(~ 0 + meta$tissue_type + meta$dev_stage)
+#design <- model.matrix(~ meta$tissue_type * meta$dev_stage)
+
+# edgeR: remove lowly expressed, scale normalize, and the log2 CPM transform
+dge <- DGEList(count_mat)
+keep <- filterByExpr(dge, design)
+dge <- dge[keep, ]
+
+# gene counts of removed
+removed <- rowSums(count_mat[!keep,])
+summary(removed)
+count_mat[which.max(removed), ]
+
+# scale normalization using TMM method (default)
+dge <- calcNormFactors(dge)
+
+# convert counts to log2CPM 
+cpm_counts <- cpm(dge, log = TRUE, prior.count = 3)
+
+# fit model with limma eBayes trend 
+fit <- lmFit(cpm_counts, design)
+fit <- eBayes(fit, trend=TRUE)
+
+# pulling specific contrasts
+test_age <- topTable(fit, number = Inf, coef = "meta$dev_stageP0")
+test_tissue <- topTable(fit, number = Inf, coef = "meta$tissue_typethymus")
 
 
+```
+
+```{r fig.height=16, fig.width=16, warning=FALSE}
+ggplot(data=test_age, aes(x = -log2(adj.P.Val))) + geom_histogram(binwidth = 0.1)
+
+```
+```{r fig.height=16, fig.width=16, warning=FALSE}
+for (i in 1:5){
+  print(paste0("The ", i ," differentially expressed genes in dev stage 0:  ", sort(test_age$adj.P.Val)[i], "name is:  ", ))
+}
+
+```
 
 
 
