@@ -14,6 +14,9 @@ all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
 avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
 diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
 meta <- suppressMessages(readr::read_tsv("Data/complete_meta_data.tsv"))
+TFs<- suppressMessages(read_delim("mouse_tfs.tsv")) 
+all_counts <- all_counts[rownames(all_counts) %in% (TFs %>% pull(Symbol)),]
+avg_counts <- avg_counts[rownames(avg_counts) %in% (TFs %>% pull(Symbol)),]
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic facial prominence", "facial prominence"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
@@ -29,7 +32,7 @@ for (tissue in tissue_types){
 }
 colnames(collapsed_dev_counts) <- tissue_types
 rownames(collapsed_dev_counts) <- rownames(all_counts)
-TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
+
 ```
 
 
@@ -227,7 +230,7 @@ expression distribution acrossed different tissues (freq_plot collapsed by dev_s
   ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), y=..density.., colour=tissue_type)) + geom_freqpoly(binwidth=0.5) + theme_cowplot(12) + scale_x_continuous(limits=c(0, 20))
 
 ```
-Mean-variance
+Mean-variance (collpased all samples)
 ```{r fig.height=8, fig.width=16}
 library(ggrepel)
 all_counts_mean_var <- all_counts
@@ -237,7 +240,7 @@ ggplot(data=data.frame(all_counts_mean_var), aes(x=log2(mean+1), y=log2(variance
   geom_text_repel(data=data.frame(all_counts_mean_var) %>% rownames_to_column(var="rowname") %>% slice_max(variance, n=10), aes(x=log2(mean+1), y=log2(variance), label=rowname, colour="red")) +
   geom_text_repel(data=data.frame(all_counts_mean_var) %>% rownames_to_column(var="rowname") %>% slice_max(mean, n=10), aes(x=log2(mean+1), y=log2(variance), label=rowname, colour="blue")) + scale_colour_discrete(name = "Top elements", labels = c("Variance", "Mean"))
 ```
-Mean and variance all together but hue by organism type
+Mean and variance all together but hue by organism type (collapsed by tissue type)
 ```{r fig.height=8, fig.width=16, warning=FALSE}
 
 collapsed_matrices <- data.frame(mean=double(), variance=double(), tissue=character(), row=character())
@@ -262,64 +265,8 @@ Variability across tissue types
 
 ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
 ```
-Zooming in on highly epxressed gene (>1025)
-```{r fig.height=8, fig.width=16}
-ggplot(data=collapsed_matrices  %>% filter(log2(mean+1) >=10), aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
-```
-Distribution of the TFs
-```{r fig.height=8, fig.width=16}
-TFCounts <- data.frame(all_counts[TFs,])
-TFCounts <- TFCounts %>% rownames_to_column("rowname")
-TFCounts <- TFCounts %>% gather("id", "counts", -rowname)
-TFCounts <- TFCounts %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
 
-ggplot(data=TFCounts, aes(x=counts)) + geom_histogram(bins = 100) + facet_grid(~  rowname) + theme_cowplot(12)
-```
-Distribution of the TFs (Log transformed)
-```{r fig.height=8, fig.width=16}
-TFCounts <- data.frame(all_counts[TFs,])
-TFCounts <- TFCounts %>% rownames_to_column("rowname")
-TFCounts <- TFCounts %>% gather("id", "counts", -rowname)
-TFCounts <- TFCounts %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
 
-ggplot(data=TFCounts, aes(x=log2(counts+1))) + geom_histogram(bins = 100) + facet_grid(~  rowname) + theme_cowplot(12)
-```
-Distribution of the TFs (Log transformed)
-```{r fig.height=8, fig.width=16}
-TFCounts <- data.frame(all_counts[TFs,])
-TFCounts <- TFCounts %>% rownames_to_column("rowname")
-TFCounts <- TFCounts %>% gather("id", "counts", -rowname)
-TFCounts <- TFCounts %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
-
-ggplot(data=collapsed_matrices %>% filter(rowname %in% TFs), aes(x=log2(mean+1), y=log2(variance+1), colour=tissue)) + geom_point()+ theme_cowplot(12) + 
-  geom_text_repel(data=collapsed_matrices %>% filter(rowname %in% TFs) %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue)) 
-
-```
-Box plots for TFs across tissues
-```{r fig.height=8, fig.width=16}
-Tcf4Counts <- TFCounts %>% filter(rowname=="Tcf4")
-
-ggplot(data=TFCounts, aes(y=counts, x=tissue_type)) + geom_boxplot() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free") + geom_hline(yintercept=mean(TFCounts$counts), colour="red")
-```
-Tcf4 seems to be involved in neuronal differentiation so it makes sense for it to be highly expressed in the brains/neural tube but no so much in liver
-Some interesting observation, Mecp2 is basically not epxressed at all same as Runx1(except in thymus), and Tcf4 is one of the most active
-
-Expression across dev_stage and tissues
-```{r fig.height=8, fig.width=16}
-
-ggplot(data=TFCounts, aes(x=dev_stage, y=counts, colour=rowname)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type, scales = "free") + scale_colour_discrete(name = "Gene")
-```
-Expression across dev_stage and tissues (log transformed)
-```{r fig.height=8, fig.width=16}
-
-ggplot(data=TFCounts, aes(x=dev_stage, y=log2(counts+1), colour=rowname)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type) + scale_colour_discrete(name = "Gene")
-```
-histograms of expresssion distribution by tissues
-```{r fig.height=8, fig.width=16}
-
-ggplot(data=TFCounts, aes(x=log2(counts+1), fill=rowname)) + geom_histogram(bins=100) + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ tissue_type, ncol=3,scales = "free") + scale_colour_discrete(name = "Gene")
-
-```
 cluster correlation heatmap
 ```{r fig.height=8, fig.width=16}
 library(gplots)
@@ -356,10 +303,10 @@ col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta$tissue_type)
 avg_counts_tissue_name <- avg_counts
 colnames(avg_counts_tissue_name) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
                                                                              return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
-heatmap.2(log2(avg_counts_tissue_name+1)[TFs,], 
+heatmap.2(log2(avg_counts_tissue_name+1)[(order(apply(avg_counts,1,var), decreasing = TRUE))[1:10],], 
           col=rev(morecols(length(TFs))),
           trace="column", 
-          main="TF count heat map across tissues",
+          main="Top 10 most variable genes across samples",
           ColSideColors=col.cell,
           scale="row")
 ```
@@ -372,10 +319,10 @@ midbrain_id <- meta %>% filter(tissue_type == "midbrain") %>% pull(id)
 midbrain_counts <- all_counts[,midbrain_id]
 colnames(midbrain_counts) <- sapply(colnames(midbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
                                                                              return(paste0(temp_row %>% pull(dev_stage)))})
-heatmap.2(log2(midbrain_counts+1)[TFs,], 
+heatmap.2(log2(midbrain_counts+1)[(order(apply(midbrain_counts,1,var), decreasing = TRUE))[1:10],], 
           col=rev(morecols(length(TFs))),
           trace="column", 
-          main="TF count heat map across Midbrain",
+          main="TOP 10 variable genes in midbrain",
           ColSideColors=col.cell,
           scale="row")
 ```
@@ -388,35 +335,19 @@ hindbrain_id <- meta %>% filter(tissue_type == "hindbrain") %>% pull(id)
 hindbrain_counts <- all_counts[,hindbrain_id]
 colnames(hindbrain_counts) <- sapply(colnames(hindbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
                                                                              return(paste0(temp_row %>% pull(dev_stage)))})
-heatmap.2(log2(hindbrain_counts+1)[TFs,], 
+heatmap.2(log2(hindbrain_counts+1)[(order(apply(hindbrain_counts,1,var), decreasing = TRUE))[1:10],], 
           col=rev(morecols(length(TFs))),
           trace="column", 
-          main="TF count heat map across Hindbrain",
+          main="Top 10 variable genes in hindbrain",
           ColSideColors=col.cell,
           scale="row")
 ```
 
+```{r fig.height=8, fig.width=16, warning=FALSE}
 
 
 
-
-
-variability (across tissues, within tissues as well) mean-variance is the ranking similar across tissues
-```{r fig.height=8, fig.width=16}
-##Remove zero variance 
-all_counts_drop_var <- (t(all_counts))[, which(apply(t(all_counts),2,var) !=0)]
-all_counts.pca <- prcomp(all_counts_drop_var, center = TRUE,scale. = TRUE)
-library(ggfortify)
-autoplot(all_counts.pca, data=meta, colour="dev_stage") + theme_cowplot(12)
-```
-
-variability (across tissues, within tissues as well) mean-variance is the ranking similar across tissues
-```{r fig.height=8, fig.width=16}
-##Remove zero variance 
-all_counts_drop_var <- (t(all_counts))[, which(apply(t(all_counts),2,var) !=0)]
-all_counts.pca <- prcomp(all_counts_drop_var, center = TRUE,scale. = TRUE)
-library(ggfortify)
-autoplot(all_counts.pca, data=meta, colour="tissue_type") + theme_cowplot(12)
+ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
 ```
 
 

@@ -16,6 +16,9 @@ meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 tissue_types <- unique(meta %>% pull(tissue_type))
+TFs<- suppressMessages(read_delim("mouse_tfs.tsv")) 
+all_counts <- all_counts[rownames(all_counts) %in% (TFs %>% pull(Symbol)),]
+avg_counts <- avg_counts[rownames(avg_counts) %in% (TFs %>% pull(Symbol)),]
 collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
 walker <- 1
 for (tissue in tissue_types){
@@ -27,7 +30,7 @@ for (tissue in tissue_types){
 }
 colnames(collapsed_dev_counts) <- tissue_types
 rownames(collapsed_dev_counts) <- rownames(all_counts)
-TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
+#TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
 ```
 
 PCA coloured by dev_stage
@@ -48,7 +51,7 @@ autoplot(all_counts.pca, data=meta, colour="tissue_type", label.size = 3, size=5
 ```
 
 Pearson correlation heatmap
-```{r fig.height=16, fig.width=16, warning=FALSE}
+```{r fig.height=16, fig.width=16, message=FALSE, warning=FALSE}
 
 library(Hmisc)
 all_counts_pear <- all_counts
@@ -129,12 +132,15 @@ files <- paste0("Data/Count_tables/", meta$id, ".tsv")
 counts <- tximport(files, type = "rsem", txIn = FALSE)
 count_mat <- counts$counts
 
+
 # name matrix and only keep protein coding genes
 rownames(count_mat) <- str_replace(rownames(count_mat), "\\.[:digit:]*$", "")
 colnames(count_mat) <- meta$id
 count_mat <- count_mat[rownames(count_mat) %in% pc$Gene_ID, ]
-oldrownames <- data.frame(rownames(count_mat)) %>% rename(Gene_ID=colnames(oldrownames)[1])
+oldrownames <- data.frame(rownames(count_mat)) 
+oldrownames <- oldrownames %>% rename(Gene_ID=colnames(oldrownames)[1])
 rownames(count_mat) <- oldrownames %>% left_join(pc,"Gene_ID") %>% pull(Symbol)
+count_mat <- count_mat[rownames(count_mat) %in% (TFs %>% pull(Symbol)),]
 
 # order by tissue and dev stage
 meta <- meta %>% group_by(tissue_type) %>% arrange(dev_stage, .by_group = TRUE)
@@ -189,8 +195,22 @@ volcanoplot(fit,coef=5)
 
 ```
 
+Prepare limma brain vs rest
+```{r fig.height=16, fig.width=16, warning=FALSE}
+#ggplot(data=test_age, aes(x = -log2(adj.P.Val))) + geom_histogram(binwidth = 0.1) + geom_vline(xintercept = -log(0.05), linetype="dotted", colour="red")
+ggplot(data=test_age, aes(x = adj.P.Val)) + geom_histogram(binwidth = 0.01)
+dev_stage <- factor(meta$dev_stage)
+brain_comp <- c("midbrain", "hindbrain", "forebrain", "neural tube")
+organism <- factor(ifelse(meta$tissue_type %in% brain_comp, "Brain", "Non-Brain"))
+organism <- relevel(brain, ref="Non-Brain")
+design <- model.matrix(~ 0 + organism + dev_stage)
 
 
+# fit model with limma eBayes trend 
+fit <- lmFit(cpm_counts, design)
+fit <- eBayes(fit, trend=TRUE)
+topTable(fit, coef = 2)
+```
 
 
 
