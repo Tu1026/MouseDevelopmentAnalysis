@@ -126,7 +126,6 @@ library(edgeR)
 library(tximport)
 
 # load data
-meta <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
 pc <- read.delim("Data/pc_sub.tsv", stringsAsFactors = FALSE)
 files <- paste0("Data/Count_tables/", meta$id, ".tsv")
 counts <- tximport(files, type = "rsem", txIn = FALSE)
@@ -148,7 +147,8 @@ count_mat <- count_mat[, meta$id]
 stopifnot(identical(colnames(count_mat), meta$id))
 
 # build design matrix
-design <- model.matrix(~ 0 + meta$dev_stage + meta$tissue_type)
+tissue_ <- factor(meta$tissue_type)
+design <- model.matrix(~ 0 + tissue_)
 #design <- model.matrix(~ meta$tissue_type * meta$dev_stage)
 
 # edgeR: remove lowly expressed, scale normalize, and the log2 CPM transform
@@ -171,50 +171,46 @@ cpm_counts <- cpm(dge, log = TRUE, prior.count = 3)
 fit <- lmFit(cpm_counts, design)
 fit <- eBayes(fit, trend=TRUE)
 
-# pulling specific contrasts
-test_age <- topTable(fit, number = Inf, coef = "meta$dev_stageP0")
-test_tissue <- topTable(fit, number = Inf, coef = "meta$tissue_typethymus")
-
-
 ```
 
+Extract all toptables into list
 ```{r fig.height=16, fig.width=16, warning=FALSE}
-#ggplot(data=test_age, aes(x = -log2(adj.P.Val))) + geom_histogram(binwidth = 0.1) + geom_vline(xintercept = -log(0.05), linetype="dotted", colour="red")
-ggplot(data=test_age, aes(x = adj.P.Val)) + geom_histogram(binwidth = 0.01)
-
-
-```
-```{r fig.height=16, fig.width=16, warning=FALSE}
-for (i in 1:5){
-  print(paste0("The ", i ," differentially expressed genes in dev stage 0:  ", arrange(test_age, desc(logFC))[i,1], "name is:  ", rownames(arrange(test_age, desc(logFC)))[i]))
+diff_list <- list() 
+for(tissue in tissue_types){
+  col_name <- paste0("tissue_", tissue)
+  diff_list[tissue] <- list(topTable(fit,coef = col_name, number = Inf))
 }
 
-```
-```{r fig.height=16, fig.width=16, warning=FALSE}
-volcanoplot(fit,coef=5)
 
 ```
 
-Prepare limma brain vs rest
-```{r fig.height=16, fig.width=16, warning=FALSE}
-#ggplot(data=test_age, aes(x = -log2(adj.P.Val))) + geom_histogram(binwidth = 0.1) + geom_vline(xintercept = -log(0.05), linetype="dotted", colour="red")
-ggplot(data=test_age, aes(x = adj.P.Val)) + geom_histogram(binwidth = 0.01)
-dev_stage <- factor(meta$dev_stage)
-brain_comp <- c("midbrain", "hindbrain", "forebrain", "neural tube")
-organism <- factor(ifelse(meta$tissue_type %in% brain_comp, "Brain", "Non-Brain"))
-organism <- relevel(brain, ref="Non-Brain")
-design <- model.matrix(~ 0 + organism + dev_stage)
-
-
-# fit model with limma eBayes trend 
-fit <- lmFit(cpm_counts, design)
-fit <- eBayes(fit, trend=TRUE)
-topTable(fit, coef = 2)
+Using 0.05 as cutoff, the numbers of differential expressed genes per tissue
+```{r fig.height=16, fig.width=20, warning=FALSE}
+get_sig_diff <- function(x){
+  return(x = length(which(x$adj.P.Val <= 0.05)))
+}
+sig_lengths <- sapply(diff_list, get_sig_diff, USE.NAMES = TRUE)
+sig_lengths <- data.frame(sig_lengths)
+sig_lengths <- sig_lengths %>% rownames_to_column()
+ggplot(data=sig_lengths, aes(x=rowname, y=sig_lengths)) + geom_bar(stat='identity') +theme_cowplot() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
 ```
 
 
 
+Put all toptables to named list
 
 
+
+
+
+
+
+
+
+hebah top 10 diff expressed per tissue, point to hindbrain genes interesting
+Inter tissue vs Intra tissue gene patterns across timme series
+Histogram of how many differentially expressed per tissue
+Heatmap shows top 10 adjusted p-value and show their logFC only keep upregulated
+See the variance across the time series (find more variable and find paper)
 
 

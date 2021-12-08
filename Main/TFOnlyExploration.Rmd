@@ -326,7 +326,7 @@ heatmap.2(log2(midbrain_counts+1)[(order(apply(midbrain_counts,1,var), decreasin
           ColSideColors=col.cell,
           scale="row")
 ```
-Hindbrain cluster correlation heatmap (only TFs)
+Hindbrain cluster correlation heatmap (only TFs) find some individual genes and describe
 ```{r fig.height=8, fig.width=20}
 # Set up colour vector for celltype variable
 col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta %>% filter(tissue_type=="hindbrain") %>% pull(id)))]
