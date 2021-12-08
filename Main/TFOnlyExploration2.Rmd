@@ -185,7 +185,7 @@ for(tissue in tissue_types){
 ```
 
 Using 0.05 as cutoff, the numbers of differential expressed genes per tissue
-```{r fig.height=16, fig.width=20, warning=FALSE}
+```{r fig.height=8, fig.width=16, warning=FALSE}
 get_sig_diff <- function(x){
   return(x = length(which(x$adj.P.Val <= 0.05)))
 }
