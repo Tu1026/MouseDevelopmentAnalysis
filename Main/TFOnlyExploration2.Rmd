@@ -8,17 +8,18 @@ Setup
 ```{r}
 library(tidyverse)
 library(cowplot)
-all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
-avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
+all_counts_all <- readRDS(file= "Data/pc_count_matrix.rds")
+avg_counts_all <- readRDS(file="Data/avg_pc_count_matrix.rds")
 diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
 meta <- suppressMessages(readr::read_tsv("Data/complete_meta_data.tsv"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic facial prominence", "facial prominence"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 tissue_types <- unique(meta %>% pull(tissue_type))
-TFs<- suppressMessages(read_delim("mouse_tfs.tsv")) 
-all_counts <- all_counts[rownames(all_counts) %in% (TFs %>% pull(Symbol)),]
-avg_counts <- avg_counts[rownames(avg_counts) %in% (TFs %>% pull(Symbol)),]
+TFs<- suppressMessages(read_delim("mouse_tfs.tsv"))
+TFs_sym <- TFs %>% pull(Symbol)
+all_counts <- all_counts_all[rownames(all_counts) %in% (TFs %>% pull(Symbol)),]
+avg_counts <- avg_counts_all[rownames(avg_counts) %in% (TFs %>% pull(Symbol)),]
 collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
 walker <- 1
 for (tissue in tissue_types){
@@ -34,20 +35,45 @@ rownames(collapsed_dev_counts) <- rownames(all_counts)
 ```
 
 PCA coloured by dev_stage
-```{r fig.height=8, fig.width=16}
+```{r fig.height=10, fig.width=16}
 ##Remove zero variance 
 all_counts_drop_var <- (t(all_counts))[, which(apply(t(all_counts),2,var) !=0)]
 all_counts.pca <- prcomp(all_counts_drop_var, center = TRUE,scale. = TRUE)
+all_counts.pca.values <- data.frame(all_counts.pca$x, dev_stage = NA, tissue_type =NA)
+for (sample in base::rownames(all_counts.pca.values)){
+  all_counts.pca.values[sample, "dev_stage"] <- meta %>% filter(id == sample) %>% pull(dev_stage)
+  all_counts.pca.values[sample, "tissue_type"] <- meta %>% filter(id == sample) %>% pull(tissue_type)
+}
 library(ggfortify)
 library(ggrepel)
 library(RColorBrewer)
-autoplot(all_counts.pca, data=meta, colour="dev_stage", label.size = 3, size=5) + theme_cowplot(12) + scale_color_brewer(palette = "RdYlBu") 
+
+c25 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "black", "gold1",
+  "skyblue2", "#FB9A99", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid1", "deeppink1", "blue1", "steelblue4",
+  "darkturquoise", "green1", "yellow4", "yellow3",
+  "darkorange4", "brown"
+)
+#autoplot(all_counts.pca, data=meta, colour="dev_stage") + theme_cowplot(12) +  scale_color_manual(values = c25) 
+#autoplot(all_counts.pca, data=meta %>% select(id, dev_stage), colour="dev_stage", label.size = 3, size=5) + theme_cowplot(12) +  scale_color_manual(values = c25)
+ggplot(data=all_counts.pca.values, aes(x=PC1, y=PC2, colour=dev_stage)) + theme_cowplot(12) +  scale_color_manual(values = c25) + geom_point( size=5) + xlab(paste("PC1", round(all_counts.pca$sdev[1]^2/ sum(all_counts.pca$sdev^2) *100, 2), "%")) +  ylab(paste("PC2", round(all_counts.pca$sdev[2]^2/ sum(all_counts.pca$sdev^2) *100, 2), "%"))
+
 
 ```
 PCA coloured by tissue
-```{r fig.height=8, fig.width=16}
-getPalette = colorRampPalette(brewer.pal(12, "Paired"))
-autoplot(all_counts.pca, data=meta, colour="tissue_type", label.size = 3, size=5) + theme_cowplot(12) + scale_color_manual(values = getPalette(length(tissue_types))) 
+```{r fig.height=10, fig.width=16}
+#getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+#autoplot(all_counts.pca, data=meta, colour="tissue_type", label.size = 3, size=5) + theme_cowplot(12) +  scale_color_manual(values = c25)
+ggplot(data=all_counts.pca.values, aes(x=PC1, y=PC2, colour=tissue_type)) + theme_cowplot(12) +  scale_color_manual(values = c25) + geom_point( size=5) + xlab(paste("PC1", round(all_counts.pca$sdev[1]^2/ sum(all_counts.pca$sdev^2) *100, 2), "%")) +  ylab(paste("PC2", round(all_counts.pca$sdev[2]^2/ sum(all_counts.pca$sdev^2) *100, 2), "%"))
 ```
 
 Pearson correlation heatmap
@@ -57,6 +83,7 @@ library(Hmisc)
 all_counts_pear <- all_counts
 colnames(all_counts_pear) <- sapply(colnames(all_counts), function(x){temp_row <- meta %>% filter(id==x) 
                                                                              return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+all_counts_pear <- all_counts_pear[,order(colnames(all_counts_pear))]
 pear_rcorr_object <- rcorr(all_counts_pear, type = "pearson")
 pear_matrix <- pear_rcorr_object$r
 pear_matrix_pvalues <- pear_rcorr_object$P
@@ -73,18 +100,19 @@ library(Hmisc)
 avg_counts_pear <- avg_counts
 colnames(avg_counts_pear) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
                                                                              return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+avg_counts_pear <- avg_counts_pear[,order(colnames(avg_counts_pear))]
 pear_rcorr_object <- rcorr(avg_counts_pear, type = "pearson")
 pear_matrix <- pear_rcorr_object$r
 pear_matrix_pvalues <- pear_rcorr_object$P
 
 
 
-corrplot(pear_matrix, method="shade", type="lower", diag=FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(0,1))
+corrplot(pear_matrix, method="shade", type="lower", diag=FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(-1,1), order="original")
 
 ```
 
 Pearson correlation heatmap (collapsed by samples) 17 clusters (because there are 17 tissues)
-```{r fig.height=16, fig.width=16, warning=FALSE}
+```{r fig.height=16, fig.width=20, warning=FALSE}
 library(corrplot)
 library(Hmisc)
 avg_counts_pear <- avg_counts
@@ -131,15 +159,15 @@ files <- paste0("Data/Count_tables/", meta$id, ".tsv")
 counts <- tximport(files, type = "rsem", txIn = FALSE)
 count_mat <- counts$counts
 
-
 # name matrix and only keep protein coding genes
 rownames(count_mat) <- str_replace(rownames(count_mat), "\\.[:digit:]*$", "")
 colnames(count_mat) <- meta$id
 count_mat <- count_mat[rownames(count_mat) %in% pc$Gene_ID, ]
 oldrownames <- data.frame(rownames(count_mat)) 
-oldrownames <- oldrownames %>% rename(Gene_ID=colnames(oldrownames)[1])
+oldrownames[,"Gene_ID"] <- oldrownames[,1]
 rownames(count_mat) <- oldrownames %>% left_join(pc,"Gene_ID") %>% pull(Symbol)
-count_mat <- count_mat[rownames(count_mat) %in% (TFs %>% pull(Symbol)),]
+
+#count_mat <- count_mat[rownames(count_mat) %in% (TFs %>% pull(Symbol)),]
 
 # order by tissue and dev stage
 meta <- meta %>% group_by(tissue_type) %>% arrange(dev_stage, .by_group = TRUE)
@@ -147,8 +175,9 @@ count_mat <- count_mat[, meta$id]
 stopifnot(identical(colnames(count_mat), meta$id))
 
 # build design matrix
-tissue_ <- factor(meta$tissue_type)
-design <- model.matrix(~ 0 + tissue_)
+tissue <- factor(meta$tissue_type)
+design <- model.matrix(~ 0 + tissue)
+colnames(design) <- gsub(' ', '_', colnames(design))
 #design <- model.matrix(~ meta$tissue_type * meta$dev_stage)
 
 # edgeR: remove lowly expressed, scale normalize, and the log2 CPM transform
@@ -173,41 +202,355 @@ fit <- eBayes(fit, trend=TRUE)
 
 ```
 
-Extract all toptables into list
+Get all contrasts (one tissue vs all for every tissue)
 ```{r fig.height=16, fig.width=16, warning=FALSE}
-diff_list <- list() 
-for(tissue in tissue_types){
-  col_name <- paste0("tissue_", tissue)
-  diff_list[tissue] <- list(topTable(fit,coef = col_name, number = Inf))
+## These are one way to get contrasts by creating new matrix where -1 what we want to subtract and 1 what we want to keep
+#   contrast.matrix <- matrix(data=-1, nrow=length(tissue_types), ncol = length(tissue_types))
+# for(i in 1:length(tissue_types)){
+#   contrast.matrix[i,i] <- 1
+# }
+# colnames(contrast.matrix) <- tissue_types
+# 
+# fit2 <- contrasts.fit(fit, contrasts = contrast.matrix)
+# fit2 <- eBayes(fit2)
+
+
+### Get all contrasts by accounting each tissue type as 1/16
+all_contrast_strings <- c()
+for (name in colnames(design)){
+  all_temp <- paste(colnames(design)[colnames(design) != name], collapse = "+")
+  all_temp <- paste0("(", all_temp, ")/", length(colnames(design)) - 1)
+  full_string <- paste0(name, "-", all_temp)
+  all_contrast_strings <- c(all_contrast_strings, full_string) 
 }
+con <- makeContrasts(contrasts = all_contrast_strings, levels=design)
+colnames(con) <- colnames(design)
+fit3 <- contrasts.fit(fit, contrasts=con)
+fit3 <- eBayes(fit3, trend=TRUE)
 
+```
 
+Extract all toptables into list
+```{r}
+diff_list_non_sig <- list() 
+diff_list <- list()
+for(tissue in colnames(design)){
+  diff_list[tissue] <- list(topTable(fit3,coef = tissue, number = Inf, p.value=0.05, sort.by = "p", resort.by = "logFC"))
+  diff_list_non_sig[tissue] <- list(topTable(fit3,coef = tissue, number = Inf, sort.by = "p", resort.by="logFC"))
+}
+diff_list.FC.Cutoff <- diff_list
+for (tissue in names(diff_list)){
+#diff_list[[tissue]] <- diff_list[[tissue]][rownames(diff_list[[tissue]]) %in% TFs_sym,]
+diff_list.FC.Cutoff[[tissue]] <- diff_list[[tissue]][diff_list[[tissue]]$logFC >= 1.5,]
+}
 ```
 
 Using 0.05 as cutoff, the numbers of differential expressed genes per tissue
 ```{r fig.height=8, fig.width=16, warning=FALSE}
+
 get_sig_diff <- function(x){
-  return(x = length(which(x$adj.P.Val <= 0.05)))
+  return(x = length(x$adj.P.Val))
 }
 sig_lengths <- sapply(diff_list, get_sig_diff, USE.NAMES = TRUE)
 sig_lengths <- data.frame(sig_lengths)
+base::rownames(sig_lengths) <- sub("tissue", "", base::rownames(sig_lengths))
 sig_lengths <- sig_lengths %>% rownames_to_column()
 ggplot(data=sig_lengths, aes(x=rowname, y=sig_lengths)) + geom_bar(stat='identity') +theme_cowplot() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
+#sig_lengths_temp <- sig_lengths
+```
+
+see if there are overlaps in the top 50 genes in the brains
+```{r}
+t.forebrain <- topTable(fit3, coef = "tissueforebrain", number=50, sort.by = "logFC", resort.by = "P", p.value=0.05)
+t.midbrain <- topTable(fit3, coef = "tissuemidbrain", number=50, sort.by = "logFC", resort.by = "P", p.value=0.05)
+t.hindbrain <- topTable(fit3, coef = "tissuehindbrain", number=50, sort.by = "logFC", resort.by = "P", p.value=0.05)
+tables <- list(t.forebrain, t.midbrain, t.hindbrain)
+table.sets <- list()
+walker <- 1
+for (table in tables){
+  table.sets[[walker]] <- data.frame(table) %>% rownames_to_column() %>% pull("rowname")
+  walker <- 1 + walker
+}
+intersects__ <- base::intersect(table.sets[[1]], table.sets[[2]])
+intersects__ <- base::intersect(intersects__, table.sets[[3]])
+print(paste0("Intersected genes are : ", intersects__))
+```
+Heatmap of the top n genes per tissue
+```{r fig.height=20, fig.width=16, warning=FALSE}
+gene_list <- c()
+global_gene_list <-c()
+gene_list_with_names <- list()
+global_gene_list_with_names <- list()
+top_n <- 2
+avg_counts_collapse_tissue <- matrix(data=NA, nrow=nrow(all_counts_all), ncol=length(unique(meta$tissue_type)))
+colnames(avg_counts_collapse_tissue) <- unique(meta$tissue_type)
+rownames(avg_counts_collapse_tissue) <- rownames(all_counts_all)
+walker <- 1
+for (tissue in unique(meta$tissue_type)){
+  avg_counts_collapse_tissue[,walker] <- apply(all_counts_all[,meta %>% filter(tissue_type == tissue) %>% pull(id)],1, mean)
+  walker <- 1 + walker
+}
+for (column in colnames(design)){
+  gene_list_with_names[column] <- list(diff_list[[column]][1:top_n,] %>% rownames())
+  global_gene_list_with_names[column] <- list(diff_list[[column]] %>% rownames())
+}
+for (column in colnames(design)){
+  gene_list <- c(gene_list, diff_list[[column]][1:top_n,] %>% rownames())
+  global_gene_list <- c(gene_list, diff_list[[column]] %>% rownames())
+}
+library(gplots)
+library(RColorBrewer)
+mypalette <- brewer.pal(11, "RdYlBu")
+# http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:17]
+heatmap.2(log2(avg_counts_collapse_tissue+1)[unique(gene_list),], 
+          col=rev(morecols(17*top_n)),
+          trace="column", 
+          main="Top 2 most DE Per tissue",
+          ColSideColors=col.cell,
+          scale = "row", cexRow=1,cexCol=1,margins=c(12,8),srtCol=45)
+```
+plot using the limma coolmap (cluster by de pattern)
+```{r fig.height=16, fig.width=16}
+coolmap(fit3[unique(gene_list),], cexRow=1,cexCol=1,margins=c(12,8),srtCol=45)
+
+
+```
+Heatmap of the top 5 genes per tissue (expressoin data)
+```{r fig.height=20, fig.width=16, warning=FALSE}
+gene_anno <- data.frame(matrix(data=NA, nrow=length(unique(gene_list)),ncol=17), row.names=unique(gene_list))
+colnames(gene_anno) <- colnames(design)
+for (col in colnames(design)){
+  for (i in 1:2){
+      gene_anno[gene_list_with_names[[col]][i], col] <- col
+  }
+  #   for (i in 1:length(gene_list_with_names[[col]])){
+  #     gene_anno[gene_list_with_names[[col]][i], col] <- col
+  # }
+
+}
+library(pheatmap)
+colnames(gene_anno) <- sub("tissue", "", colnames(gene_anno))
+pheatmap(avg_counts_collapse_tissue[unique(gene_list),], annotation_row =rev(gene_anno), treeheight_row = 0, treeheight_col = 0, cluster_rows = F, scale="row", cluster_cols = F, annotation_legend = F)
+```
+Global view of DE heatmap
+```{r fig.height=20, fig.width=16, warning=FALSE}
+gene_anno <- data.frame(matrix(data=NA, nrow=length(unique(global_gene_list)),ncol=17), row.names=unique(global_gene_list))
+colnames(gene_anno) <- colnames(design)
+for (col in colnames(design)){
+    for (i in 1:length(global_gene_list_with_names[[col]])){
+      gene_anno[global_gene_list_with_names[[col]][i], col] <- col
+  }
+
+}
+library(pheatmap)
+colnames(gene_anno) <- sub("tissue", "", colnames(gene_anno))
+pheatmap(avg_counts_collapse_tissue[unique(global_gene_list),], annotation_row =rev(gene_anno), treeheight_row = 0, treeheight_col = 0, cluster_rows = F, scale="row", cluster_cols = F, annotation_legend = F, show_rownames = FALSE)
+```
+
+Heatmap of the top 5 genes per tissue (by logFC)
+```{r fig.height=20, fig.width=16, warning=FALSE}
+heatmaplogFC <- matrix(data=NA, nrow=length(unique(gene_list)), ncol=17)
+colnames(heatmaplogFC) <- colnames(design)
+rownames(heatmaplogFC) <- unique(gene_list)
+
+for (col in colnames(heatmaplogFC)){
+  for (gene in unique(gene_list)){
+      heatmaplogFC[gene,col] <- diff_list[[col]][gene,"logFC"]
+  }
+
+}
+library(pheatmap)
+colnames(heatmaplogFC) <- sub("tissue", "", colnames(heatmaplogFC))
+colnames(gene_anno) <- sub("tissue", "", colnames(gene_anno))
+pheatmap(heatmaplogFC, annotation_row =rev(gene_anno), treeheight_row = 0, treeheight_col = 0, cluster_rows = F, cluster_cols = F, annotation_legend = F)
 ```
 
 
+Another way of graphing (average samples using only the top 50 genes)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+top_n <- 50
+gene_list <- c()
+for (i in 1:17){
+  #gene_list <- c(gene_list, topTable(fit3, coef = i, number=top_n, sort.by = "logFC", resort.by = "P", p.value=0.05) %>% rownames())
+  gene_list <- c(gene_list, (diff_list[[i]] %>% rownames())[i:top_n])
+}
 
-Put all toptables to named list
+avg_counts_pear <- avg_counts_all[gene_list,]
+colnames(avg_counts_pear) <- sapply(colnames(avg_counts_all), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+pear_rcorr_object <- rcorr(avg_counts_pear, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+testRes = cor.mtest(avg_counts_pear, conf.level = 0.95)
+corrplot(pear_matrix, method="shade", type="lower", diag=FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2))
+```
+Another way of graphing (Collapsed by time series and using only the top 50 genes)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+
+pear_rcorr_object <- rcorr(avg_counts_collapse_tissue[gene_list,], type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+corrplot(pear_matrix, method="shade", type="lower", diag=FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), order="hclust")
+```
+Top 100 expressed genes visuallized by set
+```{r fig.height=16, fig.width=16}
+top_n <- 100
+library(UpSetR)
+top_diff_list <- list() 
+for(tissue in colnames(design)){
+  #top_diff_list[tissue] <- list(topTable(fit3,coef = tissue, number = 100,p.value=0.05) %>% rownames())
+  top_diff_list[tissue] <- list(diff_list[[tissue]][1:top_n,] %>% rownames())
+}
+names(top_diff_list) <- gsub("tissue", "", names(top_diff_list))
+set_colors <- c("gray23","gray23","maroon","gray23","maroon","gray23","gray23","gray23","gray23","gray23","maroon","gray23","maroon","gray23","gray23","gray23","gray23")
+
+
+upset(fromList(top_diff_list), nsets=17, nintersects=50, order.by = "freq", decreasing = TRUE, sets.bar.color=set_colors)
+
+```
+Top 100 expressed genes in brain visuallized by set
+```{r fig.height=16, fig.width=16}
+
+upset(fromList(top_diff_list[grepl("brain", names(top_diff_list))]), nsets=3, nintersects=60, order.by = "freq", decreasing = TRUE)
+```
+
+
+Attempting the same thing but with complexupsetr
+```{r fig.height=16, fig.width=16}
+neural_parts <- c('hindbrain', "neural_tube", "forebrain", "midbrain")
+all_unique_top <- unique(unlist(top_diff_list))
+complex_up_frame <- data.frame(matrix(data=FALSE, nrow=length(all_unique_top), ncol=17))
+rownames(complex_up_frame) <- all_unique_top
+colnames(complex_up_frame) <- names(top_diff_list)
+for (gene in rownames(complex_up_frame)){
+  for(tissue in names(top_diff_list)){
+    if(gene %in% top_diff_list[[tissue]]){
+      complex_up_frame[gene,tissue] <- TRUE
+    }
+  }
+}
+gene_metadata = data.frame(
+  set=names(top_diff_list),
+    brain_or_not= ifelse((grepl("brain", names(top_diff_list)) | grepl("neural", names(top_diff_list))),"Neural","Non-neural")
+)
+ComplexUpset::upset(complex_up_frame, names(top_diff_list), min_size=5, set_sizes = FALSE,stripes= ComplexUpset::upset_stripes(
+        mapping=aes(color=brain_or_not),
+        colors=c(
+            'Neural'='green',
+            'Non-neural'='red'
+        ),
+        data=gene_metadata
+    ), queries=list(
+        ComplexUpset::upset_query(
+            intersect=neural_parts,
+            color='orange',
+            fill='orange',
+        )
+    )
+)
+```
+
+what are the six elements?
+```{r}
+neuro_tf_list <- rownames(complex_up_frame)[apply(!(complex_up_frame %>% select(-midbrain, -hindbrain,-forebrain, -neural_tube)), 1,all) & apply(complex_up_frame %>% select(midbrain, hindbrain,forebrain, neural_tube), 1,all)]
+rownames(complex_up_frame)[apply(!(complex_up_frame %>% select(-midbrain, -hindbrain,-forebrain, -neural_tube)), 1,all) & apply(complex_up_frame %>% select(midbrain, hindbrain,forebrain, neural_tube), 1,all)]
+
+```
+Graph the expression distribution of these genes in each neural part
+```{r fig.height=16, fig.width=16}
+TFCounts <- data.frame(all_counts) %>% rownames_to_column("rowname")
+TFCounts <- TFCounts %>% gather("id", "counts", -rowname)
+TFCounts <- TFCounts %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
+TFCounts.neuralOnly <- TFCounts %>% filter(tissue_type %in% c('hindbrain', "neural tube", "forebrain", "midbrain") & rowname %in% neuro_tf_list)
+
+ggplot(data=TFCounts.neuralOnly, aes(y=counts, x=tissue_type)) + geom_boxplot() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free") + geom_hline(yintercept=mean(TFCounts.neuralOnly$counts), colour="red") + theme_cowplot()
 
 
 
+```
+
+Expression time series per gene in only neural tissues
+```{r fig.height=16, fig.width=16}
+
+TFCounts.avg <- data.frame(avg_counts) %>% rownames_to_column("rowname")
+TFCounts.avg <- TFCounts.avg %>% gather("id", "counts", -rowname)
+TFCounts.avg <- TFCounts.avg %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
+TFCounts.neuralOnly_collapsed <- TFCounts.avg %>% filter(tissue_type %in% c('hindbrain', "neural tube", "forebrain", "midbrain") & rowname %in% neuro_tf_list)
+
+ggplot(data=TFCounts.neuralOnly_collapsed, aes(y=log2(counts+1), x=dev_stage, group=tissue_type)) + geom_line(aes(colour=tissue_type)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free")  + theme_cowplot()
 
 
 
+```
+Expression time series per gene in all tissues
+```{r fig.height=16, fig.width=16}
+
+ggplot(data=TFCounts.avg %>% filter(rowname %in% neuro_tf_list), aes(y=log2(counts+1), x=dev_stage, group=tissue_type)) + geom_line(aes(colour=tissue_type)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free")  + theme_cowplot()
 
 
 
-hebah top 10 diff expressed per tissue, point to hindbrain genes interesting
+```
+
+GO enrichment
+```{r fig.height=16, fig.width=16}
+library(topGO)
+library(org.Mm.eg.db)
+Mm <- org.Hs.eg.db
+select(hs, 
+       keys = rownames(topTable(fit3, coef=1)),
+       columns = c("ENTREZID", "SYMBOL"),
+       keytype = "SYMBOL")
+ggplot(data=TFCounts.avg %>% filter(rowname %in% neuro_tf_list), aes(y=log2(counts+1), x=dev_stage, group=tissue_type)) + geom_line(aes(colour=tissue_type)) + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + facet_wrap(~ rowname, scales = "free")  + theme_cowplot()
+
+
+
+```
+
+
+```{r fig.height=16, fig.width=16}
+library(EnhancedVolcano)
+EnhancedVolcano(topTable(fit3,coef="tissuehindbrain",number=Inf), x="logFC", y="adj.P.Val", lab=rownames(topTable(fit3,coef="tissuehindbrain",number=Inf)), pCutoff = 0.05, FCcutoff=1.5)
+```
+
+```{r fig.height=16, fig.width=16}
+library(EnhancedVolcano)
+EnhancedVolcano(topTable(fit3,coef="tissuehindbrain",number=Inf)[TFs_sym,], x="logFC", y="adj.P.Val", lab=rownames(topTable(fit3,coef="tissuehindbrain",number=Inf)[TFs_sym,]), pCutoff = 0.05, FCcutoff=1.5)
+```
+
+```{r fig.height=16, fig.width=16}
+library(EnhancedVolcano)
+EnhancedVolcano(topTable(fit3,coef="tissuestomach",number=Inf)[TFs_sym,], x="logFC", y="adj.P.Val", lab=rownames(topTable(fit3,coef="tissuestomach",number=Inf)[TFs_sym,]), pCutoff = 0.05, FCcutoff=1.5)
+```
+
+```{r fig.height=16, fig.width=16}
+sig<- c()
+non_sig <- c()
+for (tissue in names(diff_list)){
+    if(topTable(fit3,coef=tissue, number=Inf)["Tcf15","adj.P.Val"] <= 0.05){
+    sig <- c(sig, tissue)
+  }else{
+    non_sig <- c(non_sig, tissue)
+   }
+}
+sig <- sub("tissue", "", sig)
+non_sig <- sub("tissue", "", non_sig)
+neuro_tf_list <- rownames(complex_up_frame)[apply(!(complex_up_frame %>% select(-adrenal_gland)), 1,all) & apply(complex_up_frame %>% select(adrenal_gland), 1,all)]
+rownames(complex_up_frame)[apply(!complex_up_frame, 1, all)]
+```
+
+
+```{r fig.height=16, fig.width=16}
+TFCounts.avg <- data.frame(avg_counts) %>% rownames_to_column("rowname")
+TFCounts.avg <- TFCounts.avg %>% gather("id", "counts", -rowname)
+TFCounts.avg <- TFCounts.avg %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
+TFCounts.avg_in_vs_out <- TFCounts.avg %>% mutate(significant=ifelse(tissue_type%in%sig, "yes", "no"))
+ggplot(data=TFCounts.avg_in_vs_out %>% filter(rowname=="Tcf15"), aes(x=significant, y=counts)) + geom_boxplot()
+```
+
+have top 10 diff expressed per tissue, point to hindbrain genes interesting
 Inter tissue vs Intra tissue gene patterns across timme series
 Histogram of how many differentially expressed per tissue
 Heatmap shows top 10 adjusted p-value and show their logFC only keep upregulated

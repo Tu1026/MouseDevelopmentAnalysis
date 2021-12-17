@@ -251,13 +251,28 @@ for (tissue in tissue_types){
   all_variance <- apply(all_counts[,tissue_subset_ids],1, var)
   temp_matrix <- data.frame(mean=all_means, variance=all_variance, tissue) %>% rownames_to_column("rowname")
   collapsed_matrices <- rbind(collapsed_matrices, temp_matrix)
-}
-ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1), colour=tissue)) + geom_point()+ theme_cowplot(12) + 
-  geom_text_repel(data=collapsed_matrices %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue)) 
-  #geom_text_repel(data=collapsed_matrices %>% rownames_to_column("row") %>% slice_max(mean, n=10), aes(x=log2(mean+1), y=log2(variance+1), label=row, colour=tissue))
   
-  #scale_colour_discrete(name = "Top elements", labels = c("Variance", "Mean"))
+}
+c25 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "black", "gold1",
+  "skyblue2", "#FB9A99", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid1", "deeppink1", "blue1", "steelblue4",
+  "darkturquoise", "green1", "yellow4", "yellow3",
+  "darkorange4", "brown"
+)
+getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1), colour=tissue)) + geom_point()+ theme_cowplot(12) + 
+  geom_text_repel(data=collapsed_matrices %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue, shape=tissue)) + scale_color_manual(values = c25) + theme(legend.key.size = unit(1, 'cm'),  legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm'))
 ```
+
 Variability across tissue types 
 ```{r fig.height=8, fig.width=16, warning=FALSE}
 
@@ -349,8 +364,18 @@ heatmap.2(log2(hindbrain_counts+1)[(order(apply(hindbrain_counts,1,var), decreas
 
 ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
 ```
+```{r fig.height=8, fig.width=16}
+
+TFCounts.avg <- data.frame(avg_counts) %>% rownames_to_column("rowname")
+TFCounts.avg <- TFCounts.avg %>% gather("id", "counts", -rowname)
+TFCounts.avg <- TFCounts.avg %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
+TFCounts.Hmgb1 <- TFCounts.avg %>% filter(rowname == "Hmgb1")
+
+ggplot(data=TFCounts.Hmgb1, aes(y=log2(counts+1), x=dev_stage, group=tissue_type, colour=tissue_type)) + geom_line() + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + theme_cowplot() + scale_color_manual(values = c25)
 
 
+
+```
 
 
 

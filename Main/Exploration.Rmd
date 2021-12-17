@@ -19,6 +19,7 @@ meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal 
 meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
 tissue_types <- unique(meta %>% pull(tissue_type))
 collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
+collapsed_dev_counts_all <- matrix(data=NA, nrow=nrow(all_count_matrix$abundance),ncol=length(tissue_types))
 walker <- 1
 for (tissue in tissue_types){
   tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
@@ -27,8 +28,17 @@ for (tissue in tissue_types){
   collapsed_dev_counts[,walker] <- tissue_avg
   walker <- walker + 1
 }
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  tissue_subset_count <- all_count_matrix$abundance 
+  tissue_avg <- rowMeans(tissue_subset_count)
+  collapsed_dev_counts_all[,walker] <- tissue_avg
+  walker <- walker + 1
+}
 colnames(collapsed_dev_counts) <- tissue_types
 rownames(collapsed_dev_counts) <- rownames(all_counts)
+colnames(collapsed_dev_counts_all) <- tissue_types
 TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
 ```
 
@@ -217,6 +227,15 @@ ggplot(data=melted_collapsed_dev, aes(y=log2(count+1))) + geom_boxplot() +  face
         axis.ticks.x=element_blank()) + xlab("tissue_types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red")
 
 ```
+expression distribution acrossed different tissues (box plot collapsed dev_stages not limited to pc genes)
+```{r, fig.height=8, fig.width=16}
+melted_collapsed_dev_all <- pivot_longer(data.frame(collapsed_dev_counts_all), cols=(everything()), names_to = "tissue_type", values_to = "count")
+ggplot(data=melted_collapsed_dev_all, aes(y=log10(count+1))) + geom_boxplot() +  facet_grid(. ~ tissue_type) + theme_cowplot(12) + theme(
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) + xlab("tissue_types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red")
+
+```
+
 expression distribution acrossed different tissues (histogram collapsed by dev_stage)
 ```{r fig.height=8, fig.width=16, warning=FALSE}
   suppressWarnings(ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), fill=tissue_type, y=..density..)) + geom_histogram(binwidth = 0.5) + theme_cowplot(12))  
