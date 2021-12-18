@@ -2,7 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
-Data
+Main/Data/*
 Mouse_dev_transcriptome.Rproj
 Alex_Training
 Main/Archive
+!Main/Data/pc_count_matrix.rds
+!Main/Data/complete_meta_data.tsv
+!Main/Data/diff_pc_count_matrix.rds
+!Main/Data/avg_pc_count_matrix.rds

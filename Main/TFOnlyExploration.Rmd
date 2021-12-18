@@ -84,7 +84,7 @@ Expression profile of the highest expressed protein across all tissues Hba-a2
 Extract only Hba-a2 information
 ```{r}
 library(ggplot2)
-target_protein <- "Hba-a2"
+target_protein <- "Hmgb1"
 unique_dev_stages <- unique(meta %>% pull(dev_stage))
 Hba_matrix <- matrix(data=NA, nrow=length(tissue_types), ncol=3)
 colnames(Hba_matrix) <- c("count", "dev_stage", "tissue_type")
@@ -215,9 +215,7 @@ all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissu
 expression distribution acrossed different tissues (box plot collapsed dev_stages)
 ```{r, fig.height=8, fig.width=16}
 melted_collapsed_dev <- pivot_longer(data.frame(collapsed_dev_counts), cols=(everything()), names_to = "tissue_type", values_to = "count")
-ggplot(data=melted_collapsed_dev, aes(y=log2(count+1))) + geom_boxplot() +  facet_grid(. ~ tissue_type) + theme_cowplot(12) + theme(
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank()) + xlab("tissue_types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red")
+ggplot(data=melted_collapsed_dev, aes(y=log2(count+1), x=tissue_type)) + geom_boxplot() + theme_cowplot(12) + theme(axis.text.x = element_text(angle=45, hjust=1, size=15)) + xlab("tissue types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red") +  theme(text = element_text(size=20))
 
 ```
 expression distribution acrossed different tissues (histogram collapsed by dev_stage)
@@ -268,9 +266,9 @@ c25 <- c(
   "darkturquoise", "green1", "yellow4", "yellow3",
   "darkorange4", "brown"
 )
-getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+
 ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1), colour=tissue)) + geom_point()+ theme_cowplot(12) + 
-  geom_text_repel(data=collapsed_matrices %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue, shape=tissue)) + scale_color_manual(values = c25) + theme(legend.key.size = unit(1, 'cm'),  legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm'))
+  geom_text_repel(data=collapsed_matrices %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue, shape=tissue)) + scale_color_manual(values = c25) + theme(legend.key.size = unit(1, 'cm'),  legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm'),  text = element_text(size=20))
 ```
 
 Variability across tissue types 
@@ -371,7 +369,7 @@ TFCounts.avg <- TFCounts.avg %>% gather("id", "counts", -rowname)
 TFCounts.avg <- TFCounts.avg %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
 TFCounts.Hmgb1 <- TFCounts.avg %>% filter(rowname == "Hmgb1")
 
-ggplot(data=TFCounts.Hmgb1, aes(y=log2(counts+1), x=dev_stage, group=tissue_type, colour=tissue_type)) + geom_line() + geom_point() + theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1)) + theme_cowplot() + scale_color_manual(values = c25)
+ggplot(data=TFCounts.Hmgb1, aes(y=log2(counts+1), x=dev_stage, group=tissue_type, colour=tissue_type)) + geom_line() + geom_point() + theme(axis.text.x = element_text(size = , angle = 45, hjust = 1)) + theme_cowplot() + scale_color_manual(values = c25) + theme(text = element_text(size=20), legend.key.height = unit(1, 'cm'))
 
 
 

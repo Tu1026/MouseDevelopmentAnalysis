@@ -133,7 +133,8 @@ count_mat <- counts$counts
 rownames(count_mat) <- str_replace(rownames(count_mat), "\\.[:digit:]*$", "")
 colnames(count_mat) <- meta$id
 count_mat <- count_mat[rownames(count_mat) %in% pc$Gene_ID, ]
-oldrownames <- data.frame(rownames(count_mat)) %>% rename(Gene_ID=colnames(oldrownames)[1])
+oldrownames <- data.frame(rownames(count_mat)) 
+oldrownames[,"Gene_ID"] <- oldrownames[,1]
 rownames(count_mat) <- oldrownames %>% left_join(pc,"Gene_ID") %>% pull(Symbol)
 
 # order by tissue and dev stage
