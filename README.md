@@ -1,6 +1,5 @@
 # Mouse_dev_transcriptome
-
-Check the r notebook [here](https://htmlpreview.github.io/?https://raw.githubusercontent.com/PavlidisLab/Mouse_dev_transcriptome/Wilson_Exploration/Main/TFOnlyExploration2.html?token=APLTEWWNWZWV6ZIJRAUTL2LBYTLVY)
+An transcriptomic analyiss of bulk RNA seq from different tissues in embryonic mice in different time points. All analysis are done in R, there are 4 R markdown notebooks and one google slides for the presentation. 
 
 Check the r notebooks:
 (On TF genes only)
