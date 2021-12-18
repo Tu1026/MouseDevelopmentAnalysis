@@ -5,10 +5,11 @@ library(tidyverse)
 library(edgeR)
 library(tximport)
 
-# load data
-meta <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
-pc <- read.delim("Data/pc_sub.tsv", stringsAsFactors = FALSE)
-files <- paste0("Data/Count_tables/", meta$id, ".tsv")
+
+meta <- read.delim("Main/Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
+pc <- read.delim("Main/Data/pc_sub.tsv", stringsAsFactors = FALSE)
+files <- paste0("Main/Data/Count_tables/", meta$id, ".tsv")
+
 counts <- tximport(files, type = "rsem", txIn = FALSE)
 count_mat <- counts$counts
 

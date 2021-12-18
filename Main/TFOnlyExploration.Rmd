@@ -1,0 +1,385 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  html_notebook: default
+---
+
+
+```{r}
+library(tidyverse)
+all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
+avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
+diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
+meta <- suppressMessages(readr::read_tsv("Data/complete_meta_data.tsv"))
+TFs<- suppressMessages(read_delim("mouse_tfs.tsv")) 
+all_counts <- all_counts[rownames(all_counts) %in% (TFs %>% pull(Symbol)),]
+avg_counts <- avg_counts[rownames(avg_counts) %in% (TFs %>% pull(Symbol)),]
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic facial prominence", "facial prominence"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
+tissue_types <- unique(meta %>% pull(tissue_type))
+collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  tissue_subset_count <- all_counts[,tissue_subset_ids]
+  tissue_avg <- rowMeans(tissue_subset_count)
+  collapsed_dev_counts[,walker] <- tissue_avg
+  walker <- walker + 1
+}
+colnames(collapsed_dev_counts) <- tissue_types
+rownames(collapsed_dev_counts) <- rownames(all_counts)
+
+```
+
+
+Investigate the most highly expressed gene (sum of all stages) for each tissue type
+```{r}
+maxes_list <- list()
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_sums <- apply(all_counts[,tissue_subset_ids],1, sum)
+  maxes_list[tissue] <- names(all_sums)[which.max(all_sums)]
+}
+for (name in names(maxes_list)){
+  print(paste0("The most highly expressed protein in ", name, " : ", maxes_list[name]))
+}
+```
+Same thing as above but excluding the mitochondria
+```{r}
+maxes_list <- list()
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_sums <- apply(all_counts[,tissue_subset_ids],1, sum)
+  all_sums <- all_sums[!sapply(names(all_sums), startsWith, "mt-")]
+  maxes_list[tissue] <- names(all_sums)[which.max(all_sums)]
+}
+for (name in names(maxes_list)){
+  print(paste0("The most highly expressed protein in ", name, " : ", maxes_list[name]))
+}
+```
+Top 5 Universally highly expressed protein across all tissues regardless of stages (without processing)
+```{r}
+##Collapse dev_stages
+collapsed_matrices <- matrix(data=NA, nrow = nrow(all_counts), ncol = length(tissue_types))
+rownames(collapsed_matrices) <- rownames(all_counts)
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_avgs <- apply(all_counts[,tissue_subset_ids],1, mean)
+  collapsed_matrices[,walker] <- all_avgs
+  walker <- walker + 1
+}
+all_sums <- apply(collapsed_matrices,1, sum)
+for (i in 1:10){
+  print(paste0("The highests expressed protein acrossed all tissue in order ",i ,": ", names(sort(all_sums,decreasing=TRUE))[i]))
+}
+
+
+```
+Expression profile of the highest expressed protein across all tissues Hba-a2
+Extract only Hba-a2 information
+```{r}
+library(ggplot2)
+target_protein <- "Hmgb1"
+unique_dev_stages <- unique(meta %>% pull(dev_stage))
+Hba_matrix <- matrix(data=NA, nrow=length(tissue_types), ncol=3)
+colnames(Hba_matrix) <- c("count", "dev_stage", "tissue_type")
+Hba_frame <- data.frame(Hba_matrix)
+walker <- 1
+for (exp_id in names(avg_counts[target_protein,])){
+    Hba_frame[walker, "count"] <- avg_counts[target_protein, exp_id]
+    Hba_frame[walker, "dev_stage"] <- meta %>% filter(id==exp_id) %>% pull(dev_stage)
+    Hba_frame[walker, "tissue_type"] <- meta %>% filter(id==exp_id) %>% pull(tissue_type)
+    walker <- walker + 1
+}
+Hba_frame$count <- log2(Hba_frame$count) 
+```
+Plot the extracted information 
+```{r fig.height=8, fig.width=16}
+library(ggrepel)
+make_label <- function(row){
+  if (row['dev_stage'] == max(Hba_frame %>% filter(tissue_type==row['tissue_type']) %>% pull(dev_stage))){
+    #print(max(Hba_frame %>% filter(tissue_type==tissue) %>% pull(dev_stage)))\
+     return(as.character(row['tissue_type']))
+  }else {
+
+    return(NA_character_)
+  }
+}
+Hba_frame[,"label"] <- Hba_frame %>% apply(1,make_label)
+# Hba_frame <- Hba_frame %>%
+#   mutate(label = if_else(dev_stage == max(Hba_frame %>% filter()), as.character(tissue_type), NA_character_))
+ggplot(Hba_frame, aes(x=dev_stage, y=count, group=tissue_type, colour=tissue_type)) + geom_line() + geom_point() + expand_limits(x= c(4, 10)) +
+  # geom_text_repel(
+  #   aes(label = gsub("^.*$", " ", label)),
+  #   # This will force the correct position of the link's right end.	
+
+  #   segment.curvature = -0.1,
+  #   segment.square = TRUE,
+  #   segment.color = 'grey',
+  #   box.padding = 0.1,
+  #   point.padding = 0.6,
+  #   nudge_x = 1,
+  #   nudge_y = 1,
+  #   force = 15,
+  #   hjust = 0,
+  #   direction = "y",
+  #   na.rm = TRUE,
+  #   xlim = c(5, 10),
+  #   ylim = c(0, 150000),
+  # ) +
+  geom_text_repel(data = . %>% filter(!is.na(label)),
+                  aes(label = paste0("  ", label)),
+                  #segment.alpha = 0, ## This will 'hide' the link
+                  segment.curvature = -0.1,
+                  segment.square = TRUE,
+                  # segment.color = 'grey',
+                  box.padding = 0.1,
+                  point.padding = 0.6,
+                  nudge_x = 1,
+                  nudge_y = 1,
+                 force = 0.5,
+                  hjust = 0,
+                  direction="y",
+                  na.rm = TRUE, 
+                  xlim = c(5, 10),
+                  ylim = c(10,17),
+)                   +
+  ylab("counts(log2)") + ggtitle("Expression pattern of Hba-a2 across tissues") + theme(plot.title = element_text(hjust = 0.5))
+```
+Top 5 Universally highly expressed protein across all tissues regardless of stages (by percentage in tissues)
+```{r}
+##Collapse dev_stages
+collapsed_matrices <- matrix(data=NA, nrow = nrow(all_counts), ncol = length(tissue_types))
+rownames(collapsed_matrices) <- rownames(all_counts)
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_avgs <- apply(all_counts[,tissue_subset_ids],1, mean)
+  percent_counts <- all_avgs/sum(all_avgs)
+  collapsed_matrices[,walker] <- percent_counts
+  walker <- walker + 1
+}
+all_sums <- apply(collapsed_matrices,1, sum)
+for (i in 1:10){
+  print(paste0("The highests expressed protein acrossed all tissue in order ",i ,": ", names(sort(all_sums,decreasing=TRUE))[i]))
+}
+
+```
+Top 5 Universally highly expressed protein across all tissues regardless of stages (by ranking)
+```{r}
+##Collapse dev_stages
+collapsed_matrices <- matrix(data=NA, nrow = nrow(all_counts), ncol = length(tissue_types))
+rownames(collapsed_matrices) <- rownames(all_counts)
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_avgs <- apply(all_counts[,tissue_subset_ids],1, mean)
+  all_ranking <- rank(all_avgs)
+  collapsed_matrices[,walker] <- all_ranking
+  walker <- walker + 1
+}
+all_sums <- apply(collapsed_matrices,1, sum)
+for (i in 1:10){
+  print(paste0("The highests expressed protein acrossed all tissue in order ",i ,": ", names(sort(all_sums, decreasing = TRUE))[i]))
+}
+
+```
+
+expression distribution acrossed different tissues (box plot)
+```{r, fig.height=8, fig.width=16}
+library(cowplot)
+all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
+all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
+  ggplot(data=all_counts_melted, aes(x=dev_stage, y=log2(count+1))) + geom_boxplot() +  facet_wrap(~ tissue_type, ncol=3) + theme_cowplot(12) + geom_hline(yintercept=median(log2(all_counts+1)), colour="red")
+
+```
+expression distribution acrossed different tissues (histogram)
+```{r fig.height=8, fig.width=16, warning=FALSE}
+all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
+all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
+  suppressWarnings(ggplot(data=all_counts_melted, aes(x=log2(count+1), fill=dev_stage)) + geom_histogram(binwidth = 0.5) +  facet_wrap(~ tissue_type, ncol=3) + theme_cowplot(12))
+
+```
+
+expression distribution acrossed different tissues (histogram log transformed)
+```{r fig.height=8, fig.width=16, warning=FALSE}
+all_counts_melted <- data.frame(all_counts) %>% gather("id", "count")
+all_counts_melted <- all_counts_melted %>% inner_join((meta %>% select(id, tissue_type, dev_stage)), by="id")
+  suppressWarnings(ggplot(data=all_counts_melted, aes(x=log2(count+1), y=..density.. ,fill=dev_stage)) + geom_histogram(binwidth = 0.5) +  facet_wrap(~ tissue_type, ncol=3) + theme_cowplot(12))
+```
+expression distribution acrossed different tissues (box plot collapsed dev_stages)
+```{r, fig.height=8, fig.width=16}
+melted_collapsed_dev <- pivot_longer(data.frame(collapsed_dev_counts), cols=(everything()), names_to = "tissue_type", values_to = "count")
+ggplot(data=melted_collapsed_dev, aes(y=log2(count+1), x=tissue_type)) + geom_boxplot() + theme_cowplot(12) + theme(axis.text.x = element_text(angle=45, hjust=1, size=15)) + xlab("tissue types") + geom_hline(yintercept=median(log2(all_counts+1)), colour="red") +  theme(text = element_text(size=20))
+
+```
+expression distribution acrossed different tissues (histogram collapsed by dev_stage)
+```{r fig.height=8, fig.width=16, warning=FALSE}
+  suppressWarnings(ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), fill=tissue_type, y=..density..)) + geom_histogram(binwidth = 0.5) + theme_cowplot(12))  
+```
+expression distribution acrossed different tissues (freq_plot collapsed by dev_stage)
+```{r fig.height=8, fig.width=16, warning=FALSE}
+
+  ggplot(data=melted_collapsed_dev, aes(x=log2(count+1), y=..density.., colour=tissue_type)) + geom_freqpoly(binwidth=0.5) + theme_cowplot(12) + scale_x_continuous(limits=c(0, 20))
+
+```
+Mean-variance (collpased all samples)
+```{r fig.height=8, fig.width=16}
+library(ggrepel)
+all_counts_mean_var <- all_counts
+all_counts_mean_var <- cbind(all_counts_mean_var, mean=apply(all_counts,1,mean))
+all_counts_mean_var <- cbind(all_counts_mean_var, variance=apply(all_counts,1,var))
+ggplot(data=data.frame(all_counts_mean_var), aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() + theme_cowplot(12) + 
+  geom_text_repel(data=data.frame(all_counts_mean_var) %>% rownames_to_column(var="rowname") %>% slice_max(variance, n=10), aes(x=log2(mean+1), y=log2(variance), label=rowname, colour="red")) +
+  geom_text_repel(data=data.frame(all_counts_mean_var) %>% rownames_to_column(var="rowname") %>% slice_max(mean, n=10), aes(x=log2(mean+1), y=log2(variance), label=rowname, colour="blue")) + scale_colour_discrete(name = "Top elements", labels = c("Variance", "Mean"))
+```
+Mean and variance all together but hue by organism type (collapsed by tissue type)
+```{r fig.height=8, fig.width=16, warning=FALSE}
+
+collapsed_matrices <- data.frame(mean=double(), variance=double(), tissue=character(), row=character())
+colnames(collapsed_matrices) <- c("mean", "variance", "tissue")
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  all_means <- apply(all_counts[,tissue_subset_ids],1, mean)
+  all_variance <- apply(all_counts[,tissue_subset_ids],1, var)
+  temp_matrix <- data.frame(mean=all_means, variance=all_variance, tissue) %>% rownames_to_column("rowname")
+  collapsed_matrices <- rbind(collapsed_matrices, temp_matrix)
+  
+}
+c25 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "black", "gold1",
+  "skyblue2", "#FB9A99", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid1", "deeppink1", "blue1", "steelblue4",
+  "darkturquoise", "green1", "yellow4", "yellow3",
+  "darkorange4", "brown"
+)
+
+ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1), colour=tissue)) + geom_point()+ theme_cowplot(12) + 
+  geom_text_repel(data=collapsed_matrices %>% slice_max(variance+mean, n=15), aes(x=log2(mean+1), y=log2(variance+1), label=rowname, colour=tissue, shape=tissue)) + scale_color_manual(values = c25) + theme(legend.key.size = unit(1, 'cm'),  legend.key.height = unit(1, 'cm'), legend.key.width = unit(1, 'cm'),  text = element_text(size=20))
+```
+
+Variability across tissue types 
+```{r fig.height=8, fig.width=16, warning=FALSE}
+
+
+
+ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
+```
+
+
+cluster correlation heatmap
+```{r fig.height=8, fig.width=16}
+library(gplots)
+library(RColorBrewer)
+# Get some nicer colours
+mypalette <- brewer.pal(11, "RdYlBu")
+# http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta$tissue_type)/2)]
+# Plot the 
+avg_counts_tissue_name <- avg_counts
+colnames(avg_counts_tissue_name) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(avg_counts_tissue_name+1)[(order(apply(avg_counts,1,var), decreasing = TRUE))[1:50],], 
+          col=rev(morecols(50)),
+          trace="column", 
+          main="Top 50 most variable genes across samples",
+          ColSideColors=col.cell,
+          scale = "row")
+```
+
+cluster correlation heatmap (only TFs)
+```{r fig.height=8, fig.width=20}
+library(gplots)
+library(RColorBrewer)
+# Get some nicer colours
+mypalette <- brewer.pal(11, "RdYlBu")
+# http://colorbrewer2.org/#type=sequential&scheme=BuGn&n=3
+morecols <- colorRampPalette(mypalette)
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta$tissue_type)/2)]
+# Plot the heatmap
+avg_counts_tissue_name <- avg_counts
+colnames(avg_counts_tissue_name) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(avg_counts_tissue_name+1)[(order(apply(avg_counts,1,var), decreasing = TRUE))[1:10],], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="Top 10 most variable genes across samples",
+          ColSideColors=col.cell,
+          scale="row")
+```
+Midbrain cluster correlation heatmap (only TFs)
+```{r fig.height=8, fig.width=20}
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta %>% filter(tissue_type=="midbrain") %>% pull(id)))]
+# Plot the heatmap
+midbrain_id <- meta %>% filter(tissue_type == "midbrain") %>% pull(id)
+midbrain_counts <- all_counts[,midbrain_id]
+colnames(midbrain_counts) <- sapply(colnames(midbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(midbrain_counts+1)[(order(apply(midbrain_counts,1,var), decreasing = TRUE))[1:10],], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="TOP 10 variable genes in midbrain",
+          ColSideColors=col.cell,
+          scale="row")
+```
+Hindbrain cluster correlation heatmap (only TFs) find some individual genes and describe
+```{r fig.height=8, fig.width=20}
+# Set up colour vector for celltype variable
+col.cell <- (c("purple","orange")[meta$tissue_type])[1:(length(meta %>% filter(tissue_type=="hindbrain") %>% pull(id)))]
+# Plot the heatmap
+hindbrain_id <- meta %>% filter(tissue_type == "hindbrain") %>% pull(id)
+hindbrain_counts <- all_counts[,hindbrain_id]
+colnames(hindbrain_counts) <- sapply(colnames(hindbrain_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(dev_stage)))})
+heatmap.2(log2(hindbrain_counts+1)[(order(apply(hindbrain_counts,1,var), decreasing = TRUE))[1:10],], 
+          col=rev(morecols(length(TFs))),
+          trace="column", 
+          main="Top 10 variable genes in hindbrain",
+          ColSideColors=col.cell,
+          scale="row")
+```
+
+```{r fig.height=8, fig.width=16, warning=FALSE}
+
+
+
+ggplot(data=collapsed_matrices, aes(x=log2(mean+1), y=log2(variance+1))) + geom_point() +  facet_wrap(~ tissue, ncol=3) + theme_cowplot(12) 
+```
+```{r fig.height=8, fig.width=16}
+
+TFCounts.avg <- data.frame(avg_counts) %>% rownames_to_column("rowname")
+TFCounts.avg <- TFCounts.avg %>% gather("id", "counts", -rowname)
+TFCounts.avg <- TFCounts.avg %>% left_join((meta %>% select(tissue_type, dev_stage, id)), by="id")
+TFCounts.Hmgb1 <- TFCounts.avg %>% filter(rowname == "Hmgb1")
+
+ggplot(data=TFCounts.Hmgb1, aes(y=log2(counts+1), x=dev_stage, group=tissue_type, colour=tissue_type)) + geom_line() + geom_point() + theme(axis.text.x = element_text(size = , angle = 45, hjust = 1)) + theme_cowplot() + scale_color_manual(values = c25) + theme(text = element_text(size=20), legend.key.height = unit(1, 'cm'))
+
+
+
+```
+
+
+
+
+
+
+
+
+

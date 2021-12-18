@@ -1,0 +1,201 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+Setup
+```{r}
+library(tidyverse)
+library(cowplot)
+all_counts <- readRDS(file= "Data/pc_count_matrix.rds")
+avg_counts <- readRDS(file="Data/avg_pc_count_matrix.rds")
+diff_counts <- readRDS(file="Data/diff_pc_count_matrix.rds")
+meta <- suppressMessages(readr::read_tsv("Data/complete_meta_data.tsv"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="embryonic facial prominence", "facial prominence"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
+meta <- meta %>% mutate(tissue_type=replace(tissue_type, tissue_type=="skeletal muscle tissue", "muscle tissue"))
+tissue_types <- unique(meta %>% pull(tissue_type))
+collapsed_dev_counts <- matrix(data=NA, nrow=nrow(all_counts),ncol=length(tissue_types))
+walker <- 1
+for (tissue in tissue_types){
+  tissue_subset_ids <- meta %>% filter(tissue_type == tissue) %>% pull(id)
+  tissue_subset_count <- all_counts[,tissue_subset_ids]
+  tissue_avg <- rowMeans(tissue_subset_count)
+  collapsed_dev_counts[,walker] <- tissue_avg
+  walker <- walker + 1
+}
+colnames(collapsed_dev_counts) <- tissue_types
+rownames(collapsed_dev_counts) <- rownames(all_counts)
+TFs<- c("Ascl1", "Hes1", "Neurod1", "Mecp2", "Mef2c", "Runx1", "Tcf4", "Pax6")
+```
+
+PCA coloured by dev_stage
+```{r fig.height=8, fig.width=16}
+##Remove zero variance 
+all_counts_drop_var <- (t(all_counts))[, which(apply(t(all_counts),2,var) !=0)]
+all_counts.pca <- prcomp(all_counts_drop_var, center = TRUE,scale. = TRUE)
+library(ggfortify)
+library(ggrepel)
+library(RColorBrewer)
+autoplot(all_counts.pca, data=meta, colour="dev_stage", label.size = 3, size=5) + theme_cowplot(12) + scale_color_brewer(palette = "RdYlBu") 
+
+```
+PCA coloured by tissue
+```{r fig.height=8, fig.width=16}
+getPalette = colorRampPalette(brewer.pal(12, "Paired"))
+autoplot(all_counts.pca, data=meta, colour="tissue_type", label.size = 3, size=5) + theme_cowplot(12) + scale_color_manual(values = getPalette(length(tissue_types))) 
+```
+
+Pearson correlation heatmap
+```{r fig.height=16, fig.width=16, warning=FALSE}
+
+library(Hmisc)
+all_counts_pear <- all_counts
+colnames(all_counts_pear) <- sapply(colnames(all_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+pear_rcorr_object <- rcorr(all_counts_pear, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+library(corrplot)
+
+corrplot(pear_matrix, method = 'shade', type = 'lower', diag = FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(0,1))
+
+```
+
+Pearson correlation heatmap (collapsed by samples)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+library(corrplot)
+library(Hmisc)
+avg_counts_pear <- avg_counts
+colnames(avg_counts_pear) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+pear_rcorr_object <- rcorr(avg_counts_pear, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+
+
+
+corrplot(pear_matrix, method="shade", type="lower", diag=FALSE, col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(0,1))
+
+```
+
+Pearson correlation heatmap (collapsed by samples) 17 clusters (because there are 17 tissues)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+library(corrplot)
+library(Hmisc)
+avg_counts_pear <- avg_counts
+colnames(avg_counts_pear) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+pear_rcorr_object <- rcorr(avg_counts_pear, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+testRes = cor.mtest(avg_counts_pear, conf.level = 0.95)
+
+
+corrplot(pear_matrix, order = 'hclust', addrect = 17, method="shade", rect.col = 'black', col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(0,1))
+
+```
+Pearson correlation heatmap (collapsed by samples)  8 clusters (because 8 unique dev stages)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+library(corrplot)
+library(Hmisc)
+avg_counts_pear <- avg_counts
+colnames(avg_counts_pear) <- sapply(colnames(avg_counts), function(x){temp_row <- meta %>% filter(id==x) 
+                                                                             return(paste0(temp_row %>% pull(tissue_type), " ",temp_row %>% pull(dev_stage)))})
+pear_rcorr_object <- rcorr(avg_counts_pear, type = "pearson")
+pear_matrix <- pear_rcorr_object$r
+pear_matrix_pvalues <- pear_rcorr_object$P
+testRes = cor.mtest(avg_counts_pear, conf.level = 0.95)
+
+
+corrplot(pear_matrix, order = 'hclust', addrect = 8, method="shade", rect.col = 'black', col = rep(rev(brewer.pal(n=8, name="RdYlBu")),2), col.lim=c(0,1))
+
+```
+
+Prepare Limma (with individual comparison)
+```{r fig.height=16, fig.width=16, warning=FALSE}
+# Demonstration of using limma to find differentially expressed genes
+
+library(limma)
+library(tidyverse)
+library(edgeR)
+library(tximport)
+
+# load data
+meta <- read.delim("Data/complete_meta_data.tsv", stringsAsFactors = FALSE)
+pc <- read.delim("Data/pc_sub.tsv", stringsAsFactors = FALSE)
+files <- paste0("Data/Count_tables/", meta$id, ".tsv")
+counts <- tximport(files, type = "rsem", txIn = FALSE)
+count_mat <- counts$counts
+
+# name matrix and only keep protein coding genes
+rownames(count_mat) <- str_replace(rownames(count_mat), "\\.[:digit:]*$", "")
+colnames(count_mat) <- meta$id
+count_mat <- count_mat[rownames(count_mat) %in% pc$Gene_ID, ]
+oldrownames <- data.frame(rownames(count_mat)) 
+oldrownames[,"Gene_ID"] <- oldrownames[,1]
+rownames(count_mat) <- oldrownames %>% left_join(pc,"Gene_ID") %>% pull(Symbol)
+
+# order by tissue and dev stage
+meta <- meta %>% group_by(tissue_type) %>% arrange(dev_stage, .by_group = TRUE)
+count_mat <- count_mat[, meta$id]
+stopifnot(identical(colnames(count_mat), meta$id))
+
+# build design matrix
+design <- model.matrix(~ 0 + meta$dev_stage + meta$tissue_type)
+#design <- model.matrix(~ meta$tissue_type * meta$dev_stage)
+
+# edgeR: remove lowly expressed, scale normalize, and the log2 CPM transform
+dge <- DGEList(count_mat)
+keep <- filterByExpr(dge, design)
+dge <- dge[keep, ]
+
+# gene counts of removed
+removed <- rowSums(count_mat[!keep,])
+summary(removed)
+count_mat[which.max(removed), ]
+
+# scale normalization using TMM method (default)
+dge <- calcNormFactors(dge)
+
+# convert counts to log2CPM 
+cpm_counts <- cpm(dge, log = TRUE, prior.count = 3)
+
+# fit model with limma eBayes trend 
+fit <- lmFit(cpm_counts, design)
+fit <- eBayes(fit, trend=TRUE)
+
+# pulling specific contrasts
+test_age <- topTable(fit, number = Inf, coef = "meta$dev_stageP0")
+test_tissue <- topTable(fit, number = Inf, coef = "meta$tissue_typethymus")
+
+
+```
+
+```{r fig.height=16, fig.width=16, warning=FALSE}
+#ggplot(data=test_age, aes(x = -log2(adj.P.Val))) + geom_histogram(binwidth = 0.1) + geom_vline(xintercept = -log(0.05), linetype="dotted", colour="red")
+ggplot(data=test_age, aes(x = adj.P.Val)) + geom_histogram(binwidth = 0.01)
+
+
+```
+```{r fig.height=16, fig.width=16, warning=FALSE}
+for (i in 1:5){
+  print(paste0("The ", i ," differentially expressed genes in dev stage 0:  ", arrange(test_age, desc(logFC))[i,1], "name is:  ", rownames(arrange(test_age, desc(logFC)))[i]))
+}
+
+```
+```{r fig.height=16, fig.width=16, warning=FALSE}
+volcanoplot(fit,coef=5)
+
+```
+
+
+
+
+
+
+
+
+
+

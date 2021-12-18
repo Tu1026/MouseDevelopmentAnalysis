@@ -30,7 +30,7 @@ library(biomaRt)
 library(tools)
 library(googlesheets4)
 library(tximport)
-source(file = "functions.R")
+source(file = "Main/functions.R")
 
 
 # Download metadata tsv containing gene count table URLs
@@ -39,7 +39,7 @@ source(file = "functions.R")
 
 
 url <- "https://www.encodeproject.org/documents/ab75e52f-64d9-4c39-aea0-15372479049d/@@download/attachment/ENCSR574CRQ_metadata.tsv"
-file_path <- "Data/ENCSR574CRQ_metadata.tsv"
+file_path <- "Main/Data/ENCSR574CRQ_metadata.tsv"
 
 if (!file.exists(file_path)) {
   download.file(url, destfile = file_path)
@@ -58,7 +58,7 @@ mm_chromosome_filter <- c(1:19, "MT", "X", "Y")
 # be aware of ensembl version! save and keep fixed if possible.
 
 version <- str_extract(listMarts()$version[1], "[:digit:]+") 
-mm_ensembl_outfile <- paste0("Data/ensembl_mouse_protein_coding_", version, ".tsv")
+mm_ensembl_outfile <- paste0("Main/Data/ensembl_mouse_protein_coding_", version, ".tsv")
 
 # get annotation tables, order to chromosomes, only take protein coding
 
@@ -138,8 +138,8 @@ stopifnot(is.readable(mm_ensembl_outfile))
 
 
 
-count_dir <- "Data/Count_tables"
-file_meta <- read.delim("Data/ENCSR574CRQ_metadata.tsv", stringsAsFactors = FALSE)
+count_dir <- "Main/Data/Count_tables"
+file_meta <- read.delim("Main/Data/ENCSR574CRQ_metadata.tsv", stringsAsFactors = FALSE)
 
 
 
@@ -155,7 +155,7 @@ pre_meta <- filter(file_meta,
 
 #---Save pre_meta as a tsv
 
-write_tsv(x = pre_meta, file = "Data/pre_meta.tsv")
+write_tsv(x = pre_meta, file = "Main/Data/pre_meta.tsv")
 
 
 #Creata a Data/Count_tables directory if one does not already exist. 
@@ -211,13 +211,13 @@ for (idx in seq_along(unlist(pre_meta[,1]))){
 
 meta_data <- left_join(replicate_meta, pre_meta, by = c("id" = "File.accession"))
 
-write_tsv(x = meta_data, file = "Data/complete_meta_data.tsv")
+write_tsv(x = meta_data, file = "Main/Data/complete_meta_data.tsv")
 
 
 
 
 #---Open PC Table
-pc <- read.delim("Data/ensembl_mouse_protein_coding_104.tsv",
+pc <- read.delim("Main/Data/ensembl_mouse_protein_coding_104.tsv",
                  stringsAsFactors = FALSE)
 
 #---Remove nondistinct Symbols and Gene_IDs from pc table
@@ -227,14 +227,13 @@ pc_sub <- pc %>%
   distinct(Gene_ID, .keep_all = TRUE) %>% 
   distinct(Symbol, .keep_all = TRUE)
 
-write_tsv(x = pc_sub, file = "Data/pc_sub.tsv")
+write_tsv(x = pc_sub, file = "Main/Data/pc_sub.tsv")
 
 
 
 file_names_in_order <- paste(meta_data$id, ".tsv",sep="")
 #---Read in all the count matrix
-all_count_matrix <- tximport(paste0(count_dir,"/",file_names_in_order), type = "rsem", txIdCol = "gene_id", txIn = FALSE,
-                        countsCol = "TPM", importer = read_delim)
+all_count_matrix <- tximport(paste0(count_dir,"/",file_names_in_order), type = "rsem", txIn = FALSE)
 colnames(all_count_matrix$abundance) <- file_names_in_order
 #check the order of columns are correct
 for (file in file_names_in_order){
@@ -257,8 +256,8 @@ all_count_matrix$abundance <- all_count_matrix$abundance[(rownames(all_count_mat
 rownames(all_count_matrix$abundance) <- new_row_names$Symbol
 
 
-saveRDS(object = all_count_matrix$abundance, file = "Data/pc_count_matrix.rds")
-write_tsv(x = data.frame(all_count_matrix$abundance), file = "Data/all_count_matrix.tsv")
+saveRDS(object = all_count_matrix$abundance, file = "Main/Data/pc_count_matrix.rds")
+write_tsv(x = data.frame(all_count_matrix$abundance), file = "Main/Data/all_count_matrix.tsv")
 
 odd_names <- colnames(all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abundance),2)])
 even_names <- colnames(all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])
@@ -277,13 +276,13 @@ message("Pairs are the same good to go ahead")
 
 avg_count_matrix <- (all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abundance),2)] + 
                        all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])/2;
-saveRDS(object = avg_count_matrix, file = "Data/avg_pc_count_matrix.rds")
+saveRDS(object = avg_count_matrix, file = "Main/Data/avg_pc_count_matrix.rds")
 
-write_tsv(x = data.frame(avg_count_matrix), file = "Data/avg_count_matrix.tsv")
+write_tsv(x = data.frame(avg_count_matrix), file = "Main/Data/avg_count_matrix.tsv")
 
 diff_count_matrix <- abs(all_count_matrix$abundance[,seq(1,ncol(all_count_matrix$abundance),2)] - 
                            all_count_matrix$abundance[,seq(2,ncol(all_count_matrix$abundance),2)])
-saveRDS(object = diff_count_matrix, file = "Data/diff_pc_count_matrix.rds")
-write_tsv(x = data.frame(diff_count_matrix), file = "Data/diff_count_matrix.tsv")
-write_tsv(x = data.frame(rownames(diff_count_matrix)), "Data/rownames.tsv")
+saveRDS(object = diff_count_matrix, file = "Main/Data/diff_pc_count_matrix.rds")
+write_tsv(x = data.frame(diff_count_matrix), file = "Main/Data/diff_count_matrix.tsv")
+write_tsv(x = data.frame(rownames(diff_count_matrix)), "Main/Data/rownames.tsv")
 
